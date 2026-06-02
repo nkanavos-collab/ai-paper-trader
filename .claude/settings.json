@@ -44,7 +44,8 @@
       "PowerShell(vercel logs ai-paper-trader-tau.vercel.app --limit 50 --json 2>&1 | ConvertFrom-Json | ForEach-Object { $_.message } | Select-String \"Traceback|Error|ModuleNot|Import\" -CaseSensitive:$false | Select-Object -First 15)",
       "PowerShell(vercel inspect dpl_3fjkwEFzkCKw4UvTWD6SxwrXPNR8 2>&1)",
       "PowerShell(Get-ChildItem \"$env:LOCALAPPDATA\" -Recurse -Filter \"auth.json\" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match \"vercel\" } | Select-Object FullName | Select-Object -First 3)",
-      "PowerShell(try { $r = Invoke-WebRequest -Uri \"https://ai-paper-trader-tau.vercel.app/\" -UseBasicParsing -TimeoutSec 20; \"Status: $\\($r.StatusCode\\) | Size: $\\($r.Content.Length\\) bytes\" } catch { \"Error: $_\" })"
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"https://ai-paper-trader-tau.vercel.app/\" -UseBasicParsing -TimeoutSec 20; \"Status: $\\($r.StatusCode\\) | Size: $\\($r.Content.Length\\) bytes\" } catch { \"Error: $_\" })",
+      "PowerShell(Get-WmiObject Win32_Process -Filter \"name='python.exe'\" | Select-Object ProcessId, CommandLine | ForEach-Object { \"PID $\\($_.ProcessId\\): $\\($_.CommandLine\\)\" })"
     ],
     "additionalDirectories": [
       "c:\\Users\\rodic\\OneDrive\\Υπολογiστής\\Trading\\routers"

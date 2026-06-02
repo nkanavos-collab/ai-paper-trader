@@ -105,26 +105,24 @@ def _news_diag(symbol: str, data: dict) -> dict:
 
 def _sentiment_diag(symbol: str, data: dict) -> dict:
     meta   = data.get("_meta", {})
-    reddit = data.get("reddit", {})
+    vader  = data.get("vader_available", False)
     return {
-        "name":        "Reddit Sentiment",
-        "icon":        "bi-reddit",
-        "status":      meta.get("status", "failed"),
-        "error":       reddit.get("reason") if not reddit.get("available") else None,
-        "errors":      meta.get("errors", []),
-        "warnings":    [],
-        "call":        f"GET https://www.reddit.com/r/{{sub}}/search.json?q={symbol}&sort=new",
+        "name":        "Sentiment",
+        "icon":        "bi-chat-quote",
+        "status":      "ok" if vader else "partial",
+        "error":       None,
+        "errors":      [],
+        "warnings":    ["Reddit disabled — requires OAuth (news sentiment used instead)"],
+        "call":        "VADER sentiment on news article titles",
         "records":     meta.get("records", 0),
         "fetched_at":  meta.get("fetched_at"),
         "duration_ms": meta.get("duration_ms"),
         "details": {
-            "subreddits_tried": meta.get("subreddits_tried", []),
-            "subreddits_hit":   meta.get("subreddits_hit", []),
-            "reddit_ok":        meta.get("reddit_ok"),
-            "news_fallback":    meta.get("news_fallback"),
-            "overall_score":    data.get("overall_score"),
-            "overall_label":    data.get("overall_label"),
-            "vader_available":  data.get("vader_available"),
+            "reddit_ok":       False,
+            "news_fallback":   True,
+            "overall_score":   data.get("overall_score"),
+            "overall_label":   data.get("overall_label"),
+            "vader_available": vader,
         },
     }
 
