@@ -1,0 +1,633 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — AI Paper Trader{% endblock %}
+
+{% block content %}
+
+{# ── Header ── #}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h4 class="mb-0 fw-bold" style="letter-spacing:-0.5px">
+      <i class="bi bi-speedometer2 me-2" style="color:var(--accent)"></i>Dashboard
+    </h4>
+    {% if now %}<div class="text-muted" style="font-size:.75rem;margin-top:2px">{{ now }}</div>{% endif %}
+  </div>
+  {% if auto_status is defined and auto_status.active %}
+  <a href="/auto-trading"
+     class="d-flex align-items-center gap-2 text-decoration-none px-3 py-2"
+     style="background:var(--green-dim);border:1px solid rgba(14,203,129,.35);border-radius:99px">
+    <span class="status-dot active"></span>
+    <span style="font-size:.78rem;font-weight:700;color:var(--green)">AUTO ACTIVE</span>
+    {% if auto_status.trades_today %}
+    <span class="badge bg-success ms-1">{{ auto_status.trades_today }} trade{% if auto_status.trades_today!=1 %}s{% endif %} today</span>
+    {% endif %}
+  </a>
+  {% endif %}
+</div>
+
+{% if error %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ error }}</div>
+{% elif summary %}
+
+{# ── KPI Row ── #}
+<div class="row g-3 mb-4">
+
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-card">
+      <div class="kpi-label">Portfolio Value</div>
+      <div class="kpi-value accent">{{ summary.total_portfolio_eur | eur }}</div>
+      <div class="kpi-sub">cash + positions</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-card">
+      <div class="kpi-label">Cash Available</div>
+      <div class="kpi-value cash">{{ summary.cash_eur | eur }}</div>
+      <div class="kpi-sub">ready to invest</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-card">
+      <div class="kpi-label">Market Value</div>
+      <div class="kpi-value">{{ summary.total_market_value_eur | eur }}</div>
+      <div class="kpi-sub">{{ summary.positions | length }} open position{% if summary.positions|length != 1 %}s{% endif %}</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-card">
+      <div class="kpi-label">Unrealised P&amp;L</div>
+      {% set upnl = summary.total_pnl_eur %}
+      <div class="kpi-value {% if upnl >= 0 %}pnl-pos{% else %}pnl-neg{% endif %}">
+        {{ upnl | eur }}
+      </div>
+      <div class="kpi-sub {% if (summary.total_pnl_pct or 0) >= 0 %}pnl-pos{% else %}pnl-neg{% endif %}">
+        {{ summary.total_pnl_pct | pct }}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-card">
+      <div class="kpi-label">Realised P&amp;L</div>
+      {% set rpnl = realized_pnl if realized_pnl is not none else 0 %}
+      <div class="kpi-value {% if rpnl >= 0 %}pnl-pos{% else %}pnl-neg{% endif %}">
+        {{ rpnl | eur }}
+      </div>
+      <div class="kpi-sub">closed trades</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Return</div>
+      {% set ret = summary.overall_return_pct %}
+      <div class="kpi-value {% if ret >= 0 %}pnl-pos{% else %}pnl-neg{% endif %}">
+        {{ ret | pct }}
+      </div>
+      <div class="kpi-sub">vs €{{ "%.0f" % starting_balance }} start</div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Charts ── #}
+<div class="row g-3 mb-4">
+
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-graph-up me-2" style="color:var(--accent)"></i>Portfolio Balance</span>
+        <small class="text-muted">last 50 transactions</small>
+      </div>
+      <div class="chart-wrap chart-wrap-lg">
+        <canvas id="chartPortfolio"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-pie-chart me-2" style="color:#3a85f7"></i>Allocation
+      </div>
+      <div class="chart-wrap chart-wrap-lg d-flex flex-column align-items-center justify-content-center">
+        {% if summary.positions %}
+        <canvas id="chartAllocation" style="max-height:190px"></canvas>
+        <div id="allocLegend" class="mt-2 w-100 px-2" style="font-size:.76rem"></div>
+        {% else %}
+        <div class="text-center py-4" style="color:var(--muted)">
+          <i class="bi bi-cash-coin d-block mb-2" style="font-size:2rem;opacity:.3"></i>
+          <span style="font-size:.82rem">100% Cash — no open positions</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Equity Curve + Benchmark ── #}
+{% if equity_chart is defined and equity_chart.has_data %}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-graph-up-arrow me-2 text-success"></i>Equity Curve vs Benchmark</span>
+    <div class="d-flex gap-3 align-items-center" style="font-size:.8rem">
+      <span>
+        Portfolio
+        <strong class="ms-1 {% if equity_chart.port_return_pct >= 0 %}text-success{% else %}text-danger{% endif %}">
+          {{ "%+.1f"|format(equity_chart.port_return_pct) }}%
+        </strong>
+      </span>
+      {% if equity_chart.spy_return_pct is not none %}
+      <span class="text-muted">
+        SPY <strong class="ms-1 {% if equity_chart.spy_return_pct >= 0 %}text-success{% else %}text-danger{% endif %}">
+          {{ "%+.1f"|format(equity_chart.spy_return_pct) }}%
+        </strong>
+      </span>
+      {% endif %}
+      <a href="/risk" class="btn btn-sm btn-outline-secondary">Risk dashboard →</a>
+    </div>
+  </div>
+  <div class="chart-wrap chart-wrap-lg">
+    <canvas id="chartEquity"></canvas>
+  </div>
+</div>
+{% endif %}
+
+{# ── Earnings Calendar ── #}
+{% if earnings is defined and (earnings.held or earnings.watchlist) %}
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="bi bi-calendar-event me-2 text-warning"></i>Upcoming Earnings
+  </div>
+  <div class="card-body pb-1">
+    {% if earnings.held %}
+    <div class="mb-3">
+      <div class="text-muted small fw-semibold mb-2">HELD POSITIONS</div>
+      <div class="d-flex flex-wrap gap-2">
+        {% for e in earnings.held %}
+        <span class="badge bg-{{ e.urgency }} d-flex align-items-center gap-1 px-2 py-2">
+          <strong>{{ e.symbol }}</strong>
+          <span class="fw-normal opacity-75">{{ e.days_label }}</span>
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% if earnings.watchlist %}
+    <div>
+      <div class="text-muted small fw-semibold mb-2">WATCHLIST (30 days)</div>
+      <div class="d-flex flex-wrap gap-2">
+        {% for e in earnings.watchlist %}
+        <span class="badge bg-secondary d-flex align-items-center gap-1 px-2 py-2">
+          <strong>{{ e.symbol }}</strong>
+          <span class="fw-normal opacity-75">{{ e.days_label }}</span>
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Positions + Trades ── #}
+<div class="row g-3 mb-4">
+
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-briefcase me-2"></i>Open Positions</span>
+        <a href="/positions" class="btn btn-sm btn-outline-secondary">All positions</a>
+      </div>
+      {% if summary.positions %}
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0 align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th>Symbol</th>
+              <th class="text-end">Shares</th>
+              <th class="text-end">Value €</th>
+              <th class="text-end">P&amp;L</th>
+              <th class="text-end">Today</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in summary.positions %}
+            <tr>
+              <td>
+                <a href="/research?symbol={{ p.symbol }}"
+                   class="fw-bold text-decoration-none" style="color:var(--text)">
+                  {{ p.symbol }}
+                </a>
+              </td>
+              <td class="text-end" style="color:var(--muted)">{{ "%.4f" % p.quantity }}</td>
+              <td class="text-end fw-semibold">{{ p.market_value_eur | eur }}</td>
+              <td class="text-end {% if p.unrealised_pnl_eur >= 0 %}pnl-pos{% else %}pnl-neg{% endif %}">
+                {{ p.unrealised_pnl_eur | eur }}<br>
+                <small>{{ p.unrealised_pnl_pct | pct }}</small>
+              </td>
+              <td class="text-end {% if p.change_today_pct >= 0 %}pnl-pos{% else %}pnl-neg{% endif %}">
+                {{ p.change_today_pct | pct }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center py-5" style="color:var(--muted)">
+        <i class="bi bi-inbox d-block mb-2" style="font-size:2.5rem;opacity:.25"></i>
+        No open positions yet.
+        <a href="/trade" style="color:var(--blue)">Start trading →</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history me-2"></i>Recent Trades</span>
+        <a href="/transactions" class="btn btn-sm btn-outline-secondary">Full log</a>
+      </div>
+      {% if recent_txs %}
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0 align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th>Time</th>
+              <th>Symbol</th>
+              <th>Side</th>
+              <th class="text-end">Total €</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tx in recent_txs %}
+            <tr>
+              <td style="color:var(--muted);font-size:.78rem">{{ tx.timestamp[:16].replace("T"," ") }}</td>
+              <td class="fw-bold">{{ tx.symbol }}</td>
+              <td>
+                <span class="badge {% if tx.action == 'BUY' %}bg-success{% else %}bg-danger{% endif %}">
+                  {{ tx.action }}
+                </span>
+              </td>
+              <td class="text-end fw-semibold">{{ tx.total_eur | eur }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center py-5" style="color:var(--muted)">
+        <i class="bi bi-inbox d-block mb-2" style="font-size:2.5rem;opacity:.25"></i>
+        No trades yet.
+        <a href="/trade" style="color:var(--blue)">Make your first trade →</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+{# ── AI Portfolio Review ── #}
+{% if review is defined and review %}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-robot me-2 text-info"></i>AI Portfolio Review</span>
+    <div class="d-flex align-items-center gap-2">
+      <small class="text-muted">{{ review.created_at[:10] }}</small>
+      <a href="/risk" class="btn btn-sm btn-outline-secondary">Full risk view</a>
+    </div>
+  </div>
+  <div class="card-body" style="font-size:.88rem">
+    {{ review.review_text | replace("\n", "<br>") | safe }}
+  </div>
+</div>
+{% endif %}
+
+{# ── Autonomous Mode ── #}
+{% if auto_status is defined %}
+{% set ast = auto_status %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>
+      <span class="status-dot {% if ast.active %}active{% elif ast.paused %}paused{% else %}stopped{% endif %}"></span>
+      <i class="bi bi-robot me-1"></i>Autonomous Mode
+    </span>
+    <div class="d-flex align-items-center gap-2">
+      {% if ast.running %}
+      <span class="badge bg-info" style="color:#38bdf8">
+        <span class="spinner-grow spinner-grow-sm me-1" style="width:.55rem;height:.55rem"></span>Running
+      </span>
+      {% elif ast.active %}
+      <span class="badge bg-success">Active</span>
+      {% elif ast.paused %}
+      <span class="badge bg-warning">Paused</span>
+      {% else %}
+      <span class="badge bg-secondary">Disabled</span>
+      {% endif %}
+      <a href="/auto-trading" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-robot me-1"></i>Full view
+      </a>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="row g-3 align-items-start">
+
+      <div class="col-md-3">
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <div style="background:var(--surface-2);border-radius:var(--radius);padding:.75rem;text-align:center">
+              <div class="kpi-label">Today</div>
+              <div class="kpi-value {% if ast.trades_today > 0 %}cash{% endif %}" style="font-size:1.4rem">
+                {{ ast.trades_today }}
+              </div>
+              <div class="kpi-sub">trades</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div style="background:var(--surface-2);border-radius:var(--radius);padding:.75rem;text-align:center">
+              <div class="kpi-label">Last Run</div>
+              <div style="font-size:.75rem;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums">
+                {% if ast.last_run_at %}
+                {{ ast.last_run_at[11:16] }}<br>
+                <span style="color:var(--muted);font-size:.68rem">{{ ast.last_run_at[:10] }}</span>
+                {% else %}<span style="color:var(--muted)">Never</span>{% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+        {% if ast.enabled %}
+        <div class="d-flex gap-2 flex-wrap">
+          {% if ast.paused %}
+          <form method="post" action="/auto-trading/resume">
+            <button class="btn btn-sm btn-success"><i class="bi bi-play-fill me-1"></i>Resume</button>
+          </form>
+          {% else %}
+          <form method="post" action="/auto-trading/pause">
+            <button class="btn btn-sm btn-warning"><i class="bi bi-pause-fill me-1"></i>Pause</button>
+          </form>
+          {% endif %}
+          <form method="post" action="/auto-trading/run">
+            <button class="btn btn-sm btn-outline-primary" {% if ast.running %}disabled{% endif %}>
+              <i class="bi bi-lightning-fill me-1"></i>Run Now
+            </button>
+          </form>
+        </div>
+        {% endif %}
+        <div class="mt-2" style="font-size:.72rem;color:var(--muted)">
+          <i class="bi bi-shield-check me-1" style="color:var(--green)"></i>
+          Paper only — zero real risk
+        </div>
+      </div>
+
+      <div class="col-md-9">
+        {% set recent = ast.get('recent_decisions', []) %}
+        {% if recent %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" style="font-size:.78rem">
+            <thead class="table-dark">
+              <tr>
+                <th>Time</th><th>Symbol</th>
+                <th class="text-center">Action</th>
+                <th class="text-center">Conf</th>
+                <th>Reason</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in recent[:7] %}
+              <tr class="decision-row-{{ d.action | lower }}">
+                <td style="color:var(--muted)">{{ d.timestamp[11:16] }}</td>
+                <td class="fw-bold">{{ d.symbol }}</td>
+                <td class="text-center">
+                  <span class="badge
+                    {% if d.action == 'BUY' %}bg-success
+                    {% elif d.action == 'SELL' %}bg-danger
+                    {% else %}bg-secondary{% endif %}">{{ d.action }}</span>
+                </td>
+                <td class="text-center" style="color:var(--muted)">
+                  {{ d.confidence ~ '/10' if d.confidence else '—' }}
+                </td>
+                <td style="color:var(--muted);max-width:200px">
+                  <span title="{{ d.reason }}">{{ d.reason[:55] }}{% if d.reason|length > 55 %}…{% endif %}</span>
+                </td>
+                <td class="{% if 'executed' in d.result %}pnl-pos{% elif 'failed' in d.result %}pnl-neg{% else %}text-muted{% endif %}">
+                  {{ d.result[:22] }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div style="color:var(--muted);font-size:.84rem;padding:.75rem 0">
+          No autonomous decisions yet.
+          {% if ast.active %}Click <strong style="color:var(--text)">Run Now</strong> to start.{% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="alert alert-warning">Could not load portfolio data.</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if chart_portfolio is defined %}
+<script>
+(function(){
+  /* Chart.js defaults set in base.html */
+
+  /* Linear + Binance palette */
+  const GREEN  = '#27a644';
+  const RED    = '#ef4444';
+  const ACCENT = '#5e6ad2';   /* Linear lavender */
+  const GOLD   = '#f59e0b';
+  const BLUE   = '#3b82f6';
+  const MUTED  = '#62666d';   /* t4 */
+
+  /* ────────────────── Equity Curve vs Benchmark ────────────────── */
+  {% if equity_chart_json is defined and equity_chart.has_data %}
+  (function(){
+    const ec = {{ equity_chart_json | safe }};
+    const ctx = document.getElementById('chartEquity');
+    if (!ctx || !ec.portfolio || ec.portfolio.length < 2) return;
+
+    const datasets = [{
+      label: 'Portfolio',
+      data: ec.portfolio,
+      borderColor: GREEN,
+      backgroundColor: 'rgba(39,166,68,0.07)',
+      borderWidth: 2.5, fill: true, tension: 0.3,
+      pointRadius: ec.portfolio.length > 20 ? 0 : 3,
+      pointHoverRadius: 5,
+    }];
+    if (ec.spy && ec.spy.some(v => v !== null)) {
+      datasets.push({
+        label: 'SPY', data: ec.spy, borderColor: BLUE,
+        backgroundColor: 'transparent', borderWidth: 1.5,
+        borderDash: [4, 3], tension: 0.3, pointRadius: 0,
+        pointHoverRadius: 4, spanGaps: true,
+      });
+    }
+    if (ec.qqq && ec.qqq.some(v => v !== null)) {
+      datasets.push({
+        label: 'QQQ', data: ec.qqq, borderColor: GOLD,
+        backgroundColor: 'transparent', borderWidth: 1.5,
+        borderDash: [2, 3], tension: 0.3, pointRadius: 0,
+        pointHoverRadius: 4, spanGaps: true,
+      });
+    }
+    new Chart(ctx, {
+      type: 'line',
+      data: { labels: ec.labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { display: true, labels: { boxWidth: 10, padding: 14 } },
+          tooltip: { callbacks: { label: c => ' ' + c.dataset.label + ': €' + c.parsed.y.toFixed(2) } }
+        },
+        scales: {
+          x: { ticks: { maxTicksLimit: 8, maxRotation: 0, color: MUTED }, grid: { color: 'rgba(255,255,255,0.04)' } },
+          y: { ticks: { callback: v => '€' + v.toFixed(0), color: MUTED }, grid: { color: 'rgba(255,255,255,0.04)' } }
+        }
+      }
+    });
+  })();
+  {% endif %}
+
+  /* ────────────────── Portfolio Balance ────────────────── */
+  const pd = {{ chart_portfolio | safe }};
+  const portfolioEl = document.getElementById('chartPortfolio');
+
+  if (portfolioEl && pd.values && pd.values.length > 1) {
+    const vals  = pd.values;
+    const start = vals[0];
+    const last  = vals[vals.length - 1];
+    const up    = last >= start;
+    const lineC = up ? GREEN : RED;
+    const fillC = up ? 'rgba(14,203,129,0.07)' : 'rgba(246,70,93,0.07)';
+
+    new Chart(portfolioEl, {
+      type: 'line',
+      data: {
+        labels: pd.labels,
+        datasets: [{
+          data: vals,
+          borderColor: lineC,
+          backgroundColor: fillC,
+          borderWidth: 2,
+          pointRadius: vals.length > 15 ? 0 : 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: lineC,
+          fill: true,
+          tension: 0.3,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: c => '  Balance: €' + c.parsed.y.toFixed(2),
+              afterLabel: c => {
+                const diff = c.parsed.y - start;
+                const pct  = ((diff / start) * 100).toFixed(2);
+                return '  vs start: ' + (diff>=0?'+':'') + '€' + diff.toFixed(2) + ' (' + pct + '%)';
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { maxTicksLimit: 8, maxRotation: 0, color: MUTED },
+            grid:  { color: 'rgba(255,255,255,0.04)' }
+          },
+          y: {
+            ticks: { callback: v => '€' + v.toFixed(0), color: MUTED },
+            grid:  { color: 'rgba(255,255,255,0.04)' },
+            /* draw a dashed "start" reference line */
+            afterDataLimits(scale) { scale.min = Math.min(scale.min, start * 0.995); }
+          }
+        }
+      }
+    });
+  } else if (portfolioEl) {
+    portfolioEl.closest('.chart-wrap').innerHTML =
+      '<div class="d-flex align-items-center justify-content-center h-100" ' +
+      'style="color:var(--muted);font-size:.84rem">' +
+      '<i class="bi bi-graph-up me-2" style="opacity:.4"></i>' +
+      'No transaction history yet — make your first trade</div>';
+  }
+
+  /* ────────────────── Allocation Donut ────────────────── */
+  const ad = {{ chart_allocation | safe }};
+  const allocEl = document.getElementById('chartAllocation');
+
+  const PALETTE = [ACCENT, BLUE, GREEN, GOLD, '#a78bfa',
+                   '#34d399', '#f87171', '#60a5fa', '#fbbf24', '#c084fc'];
+
+  if (allocEl && ad.labels && ad.labels.length > 0) {
+    const total = ad.values.reduce((a,b) => a+b, 0);
+
+    new Chart(allocEl, {
+      type: 'doughnut',
+      data: {
+        labels: ad.labels,
+        datasets: [{
+          data: ad.values,
+          backgroundColor: ad.labels.map((_,i) => PALETTE[i % PALETTE.length] + '28'),
+          borderColor:     ad.labels.map((_,i) => PALETTE[i % PALETTE.length]),
+          borderWidth: 2,
+          hoverOffset: 6,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '68%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: c => ' ' + c.label + ': €' + c.parsed.toFixed(2)
+                        + ' (' + ((c.parsed/total)*100).toFixed(1) + '%)'
+            }
+          }
+        }
+      }
+    });
+
+    /* custom legend */
+    const leg = document.getElementById('allocLegend');
+    if (leg) {
+      ad.labels.forEach((lbl, i) => {
+        const pct = total > 0 ? ((ad.values[i] / total) * 100).toFixed(1) : '0';
+        const row = document.createElement('div');
+        row.className = 'd-flex justify-content-between align-items-center mb-1';
+        row.innerHTML =
+          '<div class="d-flex align-items-center gap-1">' +
+            '<span class="legend-dot" style="background:' + PALETTE[i % PALETTE.length] + '"></span>' +
+            '<span>' + lbl + '</span>' +
+          '</div>' +
+          '<span style="color:var(--muted)">' + pct + '%</span>';
+        leg.appendChild(row);
+      });
+    }
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

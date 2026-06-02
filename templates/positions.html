@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Positions — AI Paper Trader{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-briefcase me-2 text-primary"></i>Open Positions</h4>
+  {% if summary and summary.positions %}
+  <div class="d-flex gap-3 align-items-center">
+    <span class="text-muted small">{{ summary.positions | length }} position(s)</span>
+    <a href="/trade" class="btn btn-sm btn-outline-success"><i class="bi bi-plus me-1"></i>New Trade</a>
+  </div>
+  {% endif %}
+</div>
+
+{% if error %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ error }}</div>
+
+{% elif summary and summary.positions %}
+
+<!-- Summary Bar -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3">
+      <div class="stat-label">Invested</div>
+      <div class="stat-value text-white">{{ summary.total_invested_eur | eur }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3">
+      <div class="stat-label">Market Value</div>
+      <div class="stat-value text-info">{{ summary.total_market_value_eur | eur }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3">
+      <div class="stat-label">Unrealised P&amp;L</div>
+      <div class="stat-value {% if summary.total_pnl_eur >= 0 %}text-success{% else %}text-danger{% endif %}">
+        {{ summary.total_pnl_eur | eur }}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3">
+      <div class="stat-label">P&amp;L %</div>
+      <div class="stat-value {% if summary.total_pnl_pct >= 0 %}text-success{% else %}text-danger{% endif %}">
+        {{ summary.total_pnl_pct | pct }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Positions Table -->
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>Symbol</th>
+            <th>Name</th>
+            <th class="text-end">Quantity</th>
+            <th class="text-end">Entry Price €</th>
+            <th class="text-end">Current Price €</th>
+            <th class="text-end">Market Value €</th>
+            <th class="text-end">P&amp;L €</th>
+            <th class="text-end">P&amp;L %</th>
+            <th class="text-end">Today %</th>
+            <th>Entry Reason</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in summary.positions %}
+          <tr>
+            <td>
+              <a href="/research?symbol={{ p.symbol }}" class="fw-bold text-decoration-none">
+                {{ p.symbol }}
+              </a>
+            </td>
+            <td class="text-muted small">{{ p.name[:22] if p.name else '' }}</td>
+            <td class="text-end">{{ "%.4f" % p.quantity }}</td>
+            <td class="text-end">{{ p.avg_cost_eur | eur }}</td>
+            <td class="text-end">{{ p.current_price_eur | eur }}</td>
+            <td class="text-end fw-semibold">{{ p.market_value_eur | eur }}</td>
+            <td class="text-end {% if p.unrealised_pnl_eur >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+              {{ p.unrealised_pnl_eur | eur }}
+            </td>
+            <td class="text-end {% if p.unrealised_pnl_pct >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ p.unrealised_pnl_pct | pct }}
+            </td>
+            <td class="text-end {% if p.change_today_pct >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ p.change_today_pct | pct }}
+            </td>
+            <td class="small text-muted" style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                title="{{ p.entry_reason if p.entry_reason else '' }}">
+              {{ p.entry_reason if p.entry_reason else '—' }}
+            </td>
+            <td>
+              <a href="/trade" class="btn btn-sm btn-outline-danger py-0 px-2">Sell</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-secondary fw-bold">
+          <tr>
+            <td colspan="5">Total</td>
+            <td class="text-end">{{ summary.total_market_value_eur | eur }}</td>
+            <td class="text-end {% if summary.total_pnl_eur >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ summary.total_pnl_eur | eur }}
+            </td>
+            <td class="text-end {% if summary.total_pnl_pct >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ summary.total_pnl_pct | pct }}
+            </td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-briefcase display-3 d-block mb-3"></i>
+  <h5>No open positions</h5>
+  <p>Head to <a href="/research">Research</a> to find your first trade, then <a href="/trade">Trade</a> to execute it.</p>
+</div>
+{% endif %}
+
+{% endblock %}

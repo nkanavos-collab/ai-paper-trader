@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% block title %}Analytics — AI Paper Trader{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h4 class="fw-bold mb-1"><i class="bi bi-bar-chart-line-fill text-info me-2"></i>Analytics</h4>
+    <p class="text-muted small mb-0">Signal attribution, historical backtests, and alert history</p>
+  </div>
+</div>
+
+<!-- ── Tab nav ────────────────────────────────────────────────────────────── -->
+<ul class="nav nav-tabs mb-4" id="analyticsTab" role="tablist">
+  <li class="nav-item">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-attribution">
+      <i class="bi bi-diagram-3 me-1"></i>Signal Attribution
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-backtest">
+      <i class="bi bi-clock-history me-1"></i>Backtest
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-alerts">
+      <i class="bi bi-bell me-1"></i>Alert History
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content">
+
+<!-- ═══════════════════════════════ ATTRIBUTION ═══════════════════════════════ -->
+<div class="tab-pane fade show active" id="tab-attribution">
+
+  {% if not attribution.has_data %}
+  <div class="alert alert-secondary">
+    <i class="bi bi-info-circle me-2"></i>
+    {{ attribution.message }}
+    <br><small class="text-muted mt-1 d-block">
+      Evaluated predictions so far: {{ attribution.total_evaluated }}
+    </small>
+  </div>
+  {% else %}
+
+  <!-- Insight cards -->
+  {% if attribution.insights %}
+  <div class="row g-3 mb-4">
+    {% for insight in attribution.insights %}
+    <div class="col-12">
+      <div class="alert alert-info mb-0 py-2">
+        <i class="bi bi-lightbulb me-2"></i>{{ insight }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Overall stats strip -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-label">Total Evaluated</div>
+        <div class="stat-value">{{ attribution.total_evaluated }}</div>
+      </div>
+    </div>
+    {% if attribution.overall.win_rate is not none %}
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-label">Overall Win Rate</div>
+        <div class="stat-value {% if attribution.overall.win_rate >= 55 %}text-success{% elif attribution.overall.win_rate < 45 %}text-danger{% endif %}">
+          {{ attribution.overall.win_rate }}%
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    {% if attribution.overall.avg_return_pct is not none %}
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-label">Avg Return</div>
+        <div class="stat-value {% if attribution.overall.avg_return_pct >= 0 %}text-success{% else %}text-danger{% endif %}">
+          {{ "%+.2f"|format(attribution.overall.avg_return_pct) }}%
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-label">Signals Tracked</div>
+        <div class="stat-value">{{ attribution.signal_count }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bullish signals table -->
+  {% if attribution.bull_signals %}
+  <h6 class="text-success mb-2"><i class="bi bi-arrow-up-circle me-1"></i>Bullish Signals</h6>
+  <div class="table-responsive mb-4">
+    <table class="table table-sm table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Signal</th>
+          <th class="text-center">Times Fired</th>
+          <th class="text-center">Win Rate</th>
+          <th class="text-center">Avg Return</th>
+          <th class="text-center">Reliability</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in attribution.bull_signals %}
+        <tr>
+          <td>{{ s.label }}</td>
+          <td class="text-center">{{ s.count }}</td>
+          <td class="text-center">
+            {% if s.win_rate is not none %}
+              <span class="{% if s.win_rate >= 60 %}text-success fw-semibold{% elif s.win_rate < 45 %}text-danger{% else %}text-warning{% endif %}">
+                {{ s.win_rate }}%
+              </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">
+            {% if s.avg_return is not none %}
+              <span class="{% if s.avg_return >= 0 %}text-success{% else %}text-danger{% endif %}">
+                {{ "%+.2f"|format(s.avg_return) }}%
+              </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">
+            {% if s.reliability == 'strong' %}<span class="badge bg-success">Strong</span>
+            {% elif s.reliability == 'moderate' %}<span class="badge bg-warning text-dark">Moderate</span>
+            {% elif s.reliability == 'weak' %}<span class="badge bg-danger">Weak</span>
+            {% else %}<span class="badge bg-secondary">Insufficient data</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Bearish signals table -->
+  {% if attribution.bear_signals %}
+  <h6 class="text-danger mb-2"><i class="bi bi-arrow-down-circle me-1"></i>Bearish Signals</h6>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Signal</th>
+          <th class="text-center">Times Fired</th>
+          <th class="text-center">Win Rate</th>
+          <th class="text-center">Avg Return</th>
+          <th class="text-center">Reliability</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in attribution.bear_signals %}
+        <tr>
+          <td>{{ s.label }}</td>
+          <td class="text-center">{{ s.count }}</td>
+          <td class="text-center">
+            {% if s.win_rate is not none %}
+              <span class="{% if s.win_rate >= 60 %}text-success fw-semibold{% elif s.win_rate < 45 %}text-danger{% else %}text-warning{% endif %}">
+                {{ s.win_rate }}%
+              </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">
+            {% if s.avg_return is not none %}
+              <span class="{% if s.avg_return >= 0 %}text-success{% else %}text-danger{% endif %}">
+                {{ "%+.2f"|format(s.avg_return) }}%
+              </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">
+            {% if s.reliability == 'strong' %}<span class="badge bg-success">Strong</span>
+            {% elif s.reliability == 'moderate' %}<span class="badge bg-warning text-dark">Moderate</span>
+            {% elif s.reliability == 'weak' %}<span class="badge bg-danger">Weak</span>
+            {% else %}<span class="badge bg-secondary">Insufficient data</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% endif %} {# end has_data #}
+</div>
+
+<!-- ═══════════════════════════════ BACKTEST ══════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-backtest">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h6 class="mb-0">Historical signal performance (price-based signals, 2-year lookback)</h6>
+      {% if backtest.age_hours is not none %}
+      <small class="text-muted">Last computed {{ backtest.age_hours }}h ago</small>
+      {% endif %}
+    </div>
+    <button class="btn btn-sm btn-outline-info" id="runBacktestBtn" onclick="runBacktest()">
+      <i class="bi bi-play-circle me-1"></i>Run Backtest
+    </button>
+  </div>
+
+  {% if not backtest.has_data %}
+  <div class="alert alert-secondary">
+    <i class="bi bi-info-circle me-2"></i>
+    No backtest data yet. Click <strong>Run Backtest</strong> to compute historical signal performance.
+    This fetches 2 years of price data for the scanner universe (~60 seconds).
+  </div>
+  {% else %}
+
+  {% for sig in backtest.signals %}
+  <div class="card bg-body-secondary border-secondary mb-3">
+    <div class="card-header py-2">
+      <strong>{{ sig.label }}</strong>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Horizon</th>
+              <th class="text-center">Occurrences</th>
+              <th class="text-center">Win Rate</th>
+              <th class="text-center">Avg Return</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in [1, 3, 7, 30] %}
+            {% set row = sig.horizons.get(h) %}
+            <tr>
+              <td>{{ h }}d</td>
+              {% if row %}
+              <td class="text-center">{{ row.occurrences }}</td>
+              <td class="text-center">
+                <span class="{% if row.win_rate >= 55 %}text-success fw-semibold{% elif row.win_rate < 45 %}text-danger{% else %}text-warning{% endif %}">
+                  {{ row.win_rate }}%
+                </span>
+              </td>
+              <td class="text-center">
+                <span class="{% if row.avg_return >= 0 %}text-success{% else %}text-danger{% endif %}">
+                  {{ "%+.2f"|format(row.avg_return) }}%
+                </span>
+              </td>
+              {% else %}
+              <td class="text-center text-muted" colspan="3">—</td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% endif %}
+</div>
+
+<!-- ═══════════════════════════════ ALERTS ════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-alerts">
+
+  <!-- Alert config status -->
+  <div class="alert {% if alert_status.email_configured %}alert-success{% else %}alert-secondary{% endif %} mb-4 py-2">
+    <i class="bi bi-envelope me-2"></i>
+    {% if alert_status.email_configured %}
+      Email alerts active via {{ alert_status.smtp_host }}
+    {% else %}
+      Email alerts not configured. Set <code>ALERT_EMAIL_TO</code>, <code>SMTP_USER</code>,
+      <code>SMTP_PASSWORD</code> in your <code>.env</code> file to enable.
+    {% endif %}
+    &nbsp;|&nbsp; Score threshold: <strong>{{ alert_status.alert_min_score }}/100</strong>
+  </div>
+
+  <!-- Summary row -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-label">Alerts (last 50)</div>
+        <div class="stat-value">{{ alert_status.recent_count }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-label">Emails Sent</div>
+        <div class="stat-value">{{ alert_status.emailed_count }}</div>
+      </div>
+    </div>
+  </div>
+
+  {% if alert_status.recent_alerts %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Symbol</th>
+          <th>Company</th>
+          <th class="text-center">Score</th>
+          <th class="text-center">Signals</th>
+          <th class="text-center">Price</th>
+          <th class="text-center">Email</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in alert_status.recent_alerts %}
+        <tr>
+          <td class="text-muted small">{{ a.created_at[:16] | replace("T"," ") }}</td>
+          <td><strong>{{ a.symbol }}</strong></td>
+          <td class="text-muted small">{{ a.company_name or "—" }}</td>
+          <td class="text-center">
+            <span class="badge {% if a.score >= 80 %}bg-success{% elif a.score >= 70 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+              {{ "%.0f"|format(a.score) }}
+            </span>
+          </td>
+          <td class="text-center">
+            {% if a.signals %}
+            <span class="text-muted small" title="{{ a.signals | join(', ') }}">
+              {{ a.signals | length }} signal{{ "s" if a.signals|length != 1 }}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">
+            {% if a.price_usd %}<span class="text-muted small">${{ "%.2f"|format(a.price_usd) }}</span>{% else %}—{% endif %}
+          </td>
+          <td class="text-center">
+            {% if a.email_sent %}<i class="bi bi-check-circle-fill text-success"></i>
+            {% else %}<i class="bi bi-x-circle text-muted"></i>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-muted py-4 text-center">No alerts fired yet. Alerts trigger when a stock scores ≥ {{ alert_status.alert_min_score }} in the scanner.</div>
+  {% endif %}
+
+</div>
+</div>{# tab-content #}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function runBacktest() {
+  const btn = document.getElementById('runBacktestBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Running…';
+  fetch('/api/analytics/run-backtest', {method:'POST'})
+    .then(r => r.json())
+    .then(d => {
+      btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Started';
+      setTimeout(() => location.reload(), 65000);
+    })
+    .catch(() => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-play-circle me-1"></i>Run Backtest';
+    });
+}
+</script>
+{% endblock %}

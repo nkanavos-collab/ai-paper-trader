@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb",
+        "includeFiles": [
+          "api/**",
+          "app_templates.py",
+          "config.py",
+          "main.py",
+          "web_app.py",
+          "database/**",
+          "research/**",
+          "reports/**",
+          "routers/**",
+          "trading/**",
+          "tracking/**",
+          "templates/**",
+          "static/**"
+        ]
+      }
+    }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/api/index.py" }
+  ]
+}

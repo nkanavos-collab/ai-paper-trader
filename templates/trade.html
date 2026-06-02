@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+{% block title %}Trade — AI Paper Trader{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-arrow-left-right me-2 text-primary"></i>Trade</h4>
+  <div class="d-flex align-items-center gap-3">
+    <span class="text-muted small">Available cash:</span>
+    <span class="fw-bold text-info fs-5">{{ cash | eur }}</span>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  <!-- BUY Panel -->
+  <div class="col-md-6">
+    <div class="card border-success border-2 h-100">
+      <div class="card-header bg-success bg-opacity-10">
+        <i class="bi bi-plus-circle-fill text-success me-2"></i>
+        <span class="fw-bold text-success">Buy Stock / ETF</span>
+      </div>
+      <div class="card-body">
+        <!-- Live Price Lookup -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Ticker Symbol</label>
+          <div class="input-group">
+            <input type="text" id="buySymbol" class="form-control text-uppercase"
+                   placeholder="e.g. AAPL" autocomplete="off">
+            <button class="btn btn-outline-secondary" type="button" onclick="lookupPrice('buy')">
+              <i class="bi bi-search"></i> Quote
+            </button>
+          </div>
+        </div>
+        <div id="buyQuote" class="alert alert-secondary d-none mb-3 py-2">
+          <span id="buyQuoteText"></span>
+        </div>
+
+        <form method="post" action="/trade/buy"
+              onsubmit="return confirmTrade(this, 'BUY')">
+          <input type="hidden" name="symbol" id="buySymbolHidden">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Quantity <small class="text-muted">(decimals ok)</small></label>
+            <input type="number" name="quantity" id="buyQty" class="form-control"
+                   step="0.0001" min="0.0001" placeholder="e.g. 1 or 0.5" required
+                   oninput="updateBuyTotal()">
+          </div>
+          <div id="buyTotal" class="text-muted small mb-3"></div>
+          <div class="mb-3">
+            <label class="form-label">Reason <small class="text-muted">(optional)</small></label>
+            <textarea name="reason" class="form-control" rows="2"
+                      placeholder="e.g. strong earnings growth, undervalued vs peers"></textarea>
+          </div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-success btn-lg">
+              <i class="bi bi-cart-plus me-2"></i>Confirm &amp; Buy
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- SELL Panel -->
+  <div class="col-md-6">
+    <div class="card border-danger border-2 h-100">
+      <div class="card-header bg-danger bg-opacity-10">
+        <i class="bi bi-dash-circle-fill text-danger me-2"></i>
+        <span class="fw-bold text-danger">Sell Stock / ETF</span>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Position to Sell</label>
+          <div class="input-group">
+            <select id="sellSymbolSelect" class="form-select" onchange="lookupPrice('sell')">
+              <option value="">— select open position —</option>
+              {% for p in positions %}
+              <option value="{{ p.symbol }}">{{ p.symbol }} ({{ "%.4f" % p.quantity }} shares)</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-outline-secondary" type="button" onclick="lookupPrice('sell')">
+              <i class="bi bi-search"></i>
+            </button>
+          </div>
+          {% if not positions %}
+          <small class="text-muted">No open positions to sell.</small>
+          {% endif %}
+        </div>
+        <div id="sellQuote" class="alert alert-secondary d-none mb-3 py-2">
+          <span id="sellQuoteText"></span>
+        </div>
+
+        <form method="post" action="/trade/sell"
+              onsubmit="return confirmTrade(this, 'SELL')">
+          <input type="hidden" name="symbol" id="sellSymbolHidden">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Quantity <small class="text-muted">(decimals ok)</small></label>
+            <input type="number" name="quantity" id="sellQty" class="form-control"
+                   step="0.0001" min="0.0001" placeholder="e.g. 1 or 0.5" required
+                   oninput="updateSellTotal()">
+          </div>
+          <div id="sellTotal" class="text-muted small mb-3"></div>
+          <div class="mb-3">
+            <label class="form-label">Reason <small class="text-muted">(optional)</small></label>
+            <textarea name="reason" class="form-control" rows="2"
+                      placeholder="e.g. taking profit, rebalancing"></textarea>
+          </div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-danger btn-lg"
+                    {% if not positions %}disabled{% endif %}>
+              <i class="bi bi-cash-coin me-2"></i>Confirm &amp; Sell
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /row -->
+
+<!-- Kelly Position Sizing -->
+{% if kelly %}
+<div class="card mt-4 border-info border-opacity-25">
+  <div class="card-header">
+    <i class="bi bi-calculator me-2 text-info"></i>
+    <strong>Kelly Position Sizing</strong>
+    <span class="text-muted small ms-2">based on {{ kelly.sample_size }} evaluated predictions</span>
+  </div>
+  <div class="card-body">
+    <div class="row g-3 align-items-center">
+      <div class="col-md-8">
+        <div class="row g-2">
+          <div class="col-6 col-sm-3">
+            <div class="stat-card text-center">
+              <div class="stat-label">Win Rate</div>
+              <div class="stat-value {% if kelly.win_rate >= 55 %}text-success{% elif kelly.win_rate < 45 %}text-danger{% endif %}">
+                {{ kelly.win_rate }}%
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-sm-3">
+            <div class="stat-card text-center">
+              <div class="stat-label">Avg Win</div>
+              <div class="stat-value text-success">+{{ kelly.avg_win_pct }}%</div>
+            </div>
+          </div>
+          <div class="col-6 col-sm-3">
+            <div class="stat-card text-center">
+              <div class="stat-label">Avg Loss</div>
+              <div class="stat-value text-danger">-{{ kelly.avg_loss_pct }}%</div>
+            </div>
+          </div>
+          <div class="col-6 col-sm-3">
+            <div class="stat-card text-center">
+              <div class="stat-label">Half-Kelly %</div>
+              <div class="stat-value text-info">{{ (kelly.half_kelly_fraction * 100) | round(1) }}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        {% if portfolio_eur %}
+        {% set kelly_eur = portfolio_eur * kelly.half_kelly_fraction %}
+        <div class="alert alert-info mb-0 py-2 text-center">
+          <div class="small text-muted mb-1">Suggested position size (half-Kelly)</div>
+          <div class="fw-bold fs-5">€{{ "%.2f" | format(kelly_eur) }}</div>
+          <div class="small text-muted">{{ (kelly.half_kelly_fraction * 100) | round(1) }}% of €{{ "%.2f" | format(portfolio_eur) }} portfolio</div>
+          <button class="btn btn-sm btn-outline-info mt-2"
+                  onclick="applyKelly({{ kelly_eur }})">
+            Apply to Buy
+          </button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    <p class="text-muted small mb-0 mt-2">
+      Full Kelly: {{ (kelly.kelly_fraction * 100) | round(1) }}% &mdash;
+      Half-Kelly is used as a conservative position size to account for estimation error.
+      Requires ≥ 10 evaluated predictions; currently {{ kelly.sample_size }}.
+    </p>
+  </div>
+</div>
+{% endif %}
+
+<!-- Recent Trades -->
+{% if recent %}
+<div class="card mt-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-clock-history me-2"></i>Recent Trades</span>
+    <a href="/transactions" class="btn btn-sm btn-outline-secondary">All transactions</a>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover table-sm mb-0 align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Time</th>
+          <th>Symbol</th>
+          <th>Action</th>
+          <th class="text-end">Qty</th>
+          <th class="text-end">Price €</th>
+          <th class="text-end">Total €</th>
+          <th class="text-end">Balance €</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tx in recent %}
+        <tr>
+          <td class="text-muted small">{{ tx.timestamp[:16].replace("T"," ") }}</td>
+          <td class="fw-bold">{{ tx.symbol }}</td>
+          <td>
+            <span class="badge {% if tx.action == 'BUY' %}bg-success{% else %}bg-danger{% endif %}">
+              {{ tx.action }}
+            </span>
+          </td>
+          <td class="text-end text-muted">{{ "%.4f" % tx.quantity }}</td>
+          <td class="text-end">{{ tx.price_eur | eur }}</td>
+          <td class="text-end">{{ tx.total_eur | eur }}</td>
+          <td class="text-end text-info">{{ tx.balance_after_eur | eur }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let buyPrice = null;
+let sellPrice = null;
+
+async function lookupPrice(side) {
+  const sym = side === 'buy'
+    ? document.getElementById('buySymbol').value.trim().toUpperCase()
+    : document.getElementById('sellSymbolSelect').value;
+
+  if (!sym) return;
+
+  const quoteEl = document.getElementById(side + 'Quote');
+  const quoteText = document.getElementById(side + 'QuoteText');
+  quoteEl.className = 'alert alert-secondary mb-3 py-2';
+  quoteText.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Loading ' + sym + '...';
+  quoteEl.classList.remove('d-none');
+
+  try {
+    const r = await fetch('/api/quote/' + sym);
+    const d = await r.json();
+    if (d.error) {
+      quoteEl.className = 'alert alert-danger mb-3 py-2';
+      quoteText.textContent = 'Error: ' + d.error;
+      if (side === 'buy') buyPrice = null;
+      else sellPrice = null;
+    } else {
+      const price = d.price_eur.toFixed(4);
+      const chg = d.change_pct >= 0 ? '+' + d.change_pct.toFixed(2) : d.change_pct.toFixed(2);
+      const chgColor = d.change_pct >= 0 ? 'text-success' : 'text-danger';
+      quoteEl.className = 'alert alert-success mb-3 py-2';
+      quoteText.innerHTML =
+        `<strong>${d.symbol}</strong> — ${d.name || ''} &nbsp;|&nbsp; ` +
+        `<strong>€${price}</strong> &nbsp;` +
+        `<span class="${chgColor}">(${chg}% today)</span>`;
+
+      if (side === 'buy') {
+        document.getElementById('buySymbolHidden').value = sym;
+        buyPrice = parseFloat(price);
+        updateBuyTotal();
+      } else {
+        document.getElementById('sellSymbolHidden').value = sym;
+        sellPrice = parseFloat(price);
+        updateSellTotal();
+      }
+    }
+  } catch (e) {
+    quoteEl.className = 'alert alert-danger mb-3 py-2';
+    quoteText.textContent = 'Could not fetch quote. Check your connection.';
+  }
+}
+
+function updateBuyTotal() {
+  const qty = parseFloat(document.getElementById('buyQty').value);
+  const el = document.getElementById('buyTotal');
+  if (buyPrice && qty > 0) {
+    const total = (buyPrice * qty).toFixed(2);
+    const cash = {{ cash }};
+    const ok = parseFloat(total) <= cash;
+    el.innerHTML = `Estimated cost: <strong>€${total}</strong>` +
+      (ok ? '' : ' <span class="text-danger">— insufficient cash</span>');
+  } else {
+    el.textContent = '';
+  }
+}
+
+function updateSellTotal() {
+  const qty = parseFloat(document.getElementById('sellQty').value);
+  const el = document.getElementById('sellTotal');
+  if (sellPrice && qty > 0) {
+    el.innerHTML = `Estimated proceeds: <strong>€${(sellPrice * qty).toFixed(2)}</strong>`;
+  } else {
+    el.textContent = '';
+  }
+}
+
+function confirmTrade(form, side) {
+  const sym = side === 'BUY'
+    ? document.getElementById('buySymbolHidden').value || document.getElementById('buySymbol').value
+    : document.getElementById('sellSymbolHidden').value || document.getElementById('sellSymbolSelect').value;
+  const qty = side === 'BUY'
+    ? document.getElementById('buyQty').value
+    : document.getElementById('sellQty').value;
+
+  if (!sym) {
+    alert('Please enter a ticker symbol and click Quote first.');
+    return false;
+  }
+
+  if (side === 'BUY' && !document.getElementById('buySymbolHidden').value) {
+    document.getElementById('buySymbolHidden').value = sym;
+  }
+  if (side === 'SELL' && !document.getElementById('sellSymbolHidden').value) {
+    document.getElementById('sellSymbolHidden').value = sym;
+  }
+
+  const action = side === 'BUY' ? 'buy' : 'sell';
+  return confirm(`Confirm ${action} ${qty} × ${sym}?\n\nThis is PAPER TRADING only — no real money involved.`);
+}
+
+function applyKelly(kellyEur) {
+  if (!buyPrice) {
+    alert('Get a quote first so the share count can be calculated.');
+    return;
+  }
+  const qty = (kellyEur / buyPrice).toFixed(4);
+  document.getElementById('buyQty').value = qty;
+  updateBuyTotal();
+  document.getElementById('buyQty').focus();
+}
+
+// Auto-populate sell symbol hidden when select changes
+document.getElementById('sellSymbolSelect').addEventListener('change', function() {
+  document.getElementById('sellSymbolHidden').value = this.value;
+  sellPrice = null;
+  document.getElementById('sellTotal').textContent = '';
+  lookupPrice('sell');
+});
+</script>
+{% endblock %}

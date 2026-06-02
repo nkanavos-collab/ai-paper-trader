@@ -1,0 +1,36 @@
+============================================================
+PYTHON: 3.11.4 | packaged by Anaconda, Inc. | (main, Jul  5 2023, 13:38:37) [MSC v.1916 64 bit (AMD64)]
+CWD:    c:\Users\rodic\OneDrive\Υπολογιστής\Trading
+============================================================
+
+  OK   config
+  OK   dotenv
+  OK   fastapi
+  OK   uvicorn
+  OK   yfinance
+  OK   database.models
+  OK   database.db
+  OK   trading.market
+  OK   trading.engine
+  OK   trading.portfolio
+  OK   research.sources.market
+  OK   research.sources.news
+  OK   research.sources.sentiment
+  OK   research.sources.macro
+  OK   research.analyst
+  OK   routers.dashboard
+  OK   routers.research
+  OK   routers.trade
+  OK   routers.positions
+  OK   routers.transactions
+  OK   routers.reports
+  OK   routers.predictions
+  OK   routers.diagnostics
+  OK   routers.auto_trading
+  OK   trading.auto_trader
+
+============================================================
+ALL OK — try:  python web_app.py
+============================================================
+
+Full output saved to: c:\Users\rodic\OneDrive\Υπολογιστής\Trading\diagnose_output.txt

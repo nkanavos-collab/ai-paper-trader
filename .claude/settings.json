@@ -1,0 +1,46 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /s /b .)",
+      "Bash(pip install *)",
+      "Read(//usr/**)",
+      "Read(//c/Users/rodic/AppData/Local/Programs/**)",
+      "Bash(ls \"c:\\\\Users\\\\rodic\\\\.claude\\\\projects\\\\c--Users-rodic-OneDrive-------------Trading\\\\memory\\\\\" 2>/dev/null || echo \"dir not found\")",
+      "Read(//c/Users/rodic/.claude/projects/c--Users-rodic-OneDrive-------------Trading/memory\" 2>/dev/**)",
+      "Read(//c/Users/rodic/.claude/projects/c--Users-rodic-OneDrive-------------Trading/memory/**)",
+      "Bash(python3 -c ' *)",
+      "Bash(/c/Users/rodic/anaconda3/python.exe -W ignore -c ' *)",
+      "Bash(python -m py_compile routers/diagnostics.py)",
+      "Bash(python -m py_compile test_data_sources.py)",
+      "PowerShell(py --version 2>$null)",
+      "Read(//c/Users/rodic/OneDrive/����������/**)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(curl -s \"https://api.github.com/repos/VoltAgent/awesome-design-md/contents/design-md\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "PowerShell(& \"C:\\\\Users\\\\rodic\\\\anaconda3\\\\python.exe\" --version)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\rodic\\\\OneDrive\\\\Υπολογιστής\\\\Trading\" -Recurse -Include \"*.py\", \"*.html\", \"*.js\", \"*.tsx\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(python -c \"import yfinance; print\\(yfinance.__version__\\); import yfinance as yf; news = yf.Ticker\\('AAPL'\\).news; print\\(type\\(news\\), len\\(news\\) if news else 0\\); print\\(news[0] if news else 'empty'\\)\")",
+      "Bash(py -c \"import yfinance; print\\(yfinance.__version__\\); import yfinance as yf; news = yf.Ticker\\('AAPL'\\).news; print\\(type\\(news\\), len\\(news\\) if news else 0\\); print\\(news[0] if news else 'empty'\\)\")",
+      "Read(//c/Users/rodic/**)",
+      "PowerShell(& \"C:\\\\Users\\\\rodic\\\\anaconda3\\\\python.exe\" -c \"import yfinance; print\\(yfinance.__version__\\); import yfinance as yf; news = yf.Ticker\\('AAPL'\\).news; print\\(type\\(news\\), len\\(news\\) if news else 0\\); import json; print\\(json.dumps\\(news[0], indent=2\\) if news else 'empty'\\)\" 2>&1)",
+      "Bash(python -c \"s1='C:\\\\\\\\Users\\\\\\\\rodic\\\\\\\\OneDrive\\\\\\\\Υπολογiστής\\\\\\\\Trading'; s2='C:\\\\\\\\Users\\\\\\\\rodic\\\\\\\\OneDrive\\\\\\\\Υπολογιστής\\\\\\\\Trading'; print\\(repr\\(s1\\)\\); print\\(repr\\(s2\\)\\); print\\('same?', s1==s2\\)\")",
+      "PowerShell($s1 = \"C:\\\\Users\\\\rodic\\\\OneDrive\\\\Υπολογiστής\\\\Trading\"; $s2 = \"C:\\\\Users\\\\rodic\\\\OneDrive\\\\Υπολογιστής\\\\Trading\"; Write-Host \"Path1: $s1\"; Write-Host \"Path2: $s2\"; Write-Host \"Same: $\\($s1 -eq $s2\\)\")",
+      "PowerShell(Get-Command python, python3, py 2>$null)",
+      "Read(//c//**)",
+      "PowerShell(try { \\(Invoke-WebRequest -Uri \"http://127.0.0.1:8001/ping\" -UseBasicParsing -TimeoutSec 3\\).Content } catch { \"Not reachable: $_\" })",
+      "PowerShell(try { \\(Invoke-WebRequest -Uri \"http://127.0.0.1:8001/analytics\" -UseBasicParsing -TimeoutSec 3\\).StatusCode } catch { $_.Exception.Response.StatusCode.value__ })",
+      "PowerShell(try { $r = \\(Invoke-WebRequest -Uri \"http://127.0.0.1:8001/openapi.json\" -UseBasicParsing -TimeoutSec 5\\).Content | ConvertFrom-Json; $r.paths.PSObject.Properties.Name | Sort-Object } catch { \"Error: $_\" })",
+      "PowerShell(Get-Command gh 2>$null)",
+      "PowerShell(Get-Command vercel 2>$null)",
+      "PowerShell(where.exe gh 2>$null; Get-ChildItem \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" -ErrorAction SilentlyContinue | Select-Object FullName; Get-ChildItem \"$env:LOCALAPPDATA\\\\Programs\\\\GitHub CLI\\\\gh.exe\" -ErrorAction SilentlyContinue | Select-Object FullName)",
+      "PowerShell(vercel whoami 2>&1)",
+      "PowerShell(git config --global credential.helper)",
+      "PowerShell(git credential-manager version 2>&1)",
+      "PowerShell(git credential-manager --version 2>&1)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\rodic\\OneDrive\\Υπολογiστής\\Trading\\routers"
+    ]
+  }
+}

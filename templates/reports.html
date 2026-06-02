@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Reports — AI Paper Trader{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-file-earmark-spreadsheet me-2 text-primary"></i>Excel Reports</h4>
+</div>
+
+<!-- Generate Card -->
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Generate Report</h5>
+    <p class="card-text text-muted">
+      Creates a multi-sheet Excel workbook with your portfolio overview, open positions,
+      full transaction history, and AI research notes.
+    </p>
+    <form method="post" action="/reports/generate">
+      <button type="submit" class="btn btn-primary btn-lg">
+        <i class="bi bi-download me-2"></i>Generate Excel Report
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Available Reports -->
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-folder2-open me-2"></i>Available Reports</span>
+    <span class="badge bg-secondary">{{ reports | length }}</span>
+  </div>
+  <div class="card-body p-0">
+    {% if reports %}
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Filename</th>
+          <th>Generated</th>
+          <th class="text-end">Size</th>
+          <th class="text-center">Download</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reports %}
+        <tr>
+          <td>
+            <i class="bi bi-file-earmark-excel text-success me-2"></i>
+            <span class="small font-monospace">{{ r.name }}</span>
+          </td>
+          <td class="text-muted small">{{ r.created }}</td>
+          <td class="text-end text-muted small">{{ r.size_kb }} KB</td>
+          <td class="text-center">
+            <a href="{{ r.url }}" download class="btn btn-sm btn-outline-success">
+              <i class="bi bi-download me-1"></i>Download
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-file-earmark-x display-3 d-block mb-3"></i>
+      <h5>No reports generated yet</h5>
+      <p>Click the button above to generate your first report.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Report Contents Info -->
+<div class="card mt-4">
+  <div class="card-header"><i class="bi bi-info-circle me-2"></i>Report Contents</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="d-flex align-items-start gap-2">
+          <i class="bi bi-bar-chart-fill text-primary fs-4"></i>
+          <div>
+            <div class="fw-semibold">Overview</div>
+            <small class="text-muted">Portfolio summary, balance, total return</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="d-flex align-items-start gap-2">
+          <i class="bi bi-briefcase-fill text-success fs-4"></i>
+          <div>
+            <div class="fw-semibold">Positions</div>
+            <small class="text-muted">Open positions with live P&amp;L snapshot</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="d-flex align-items-start gap-2">
+          <i class="bi bi-receipt text-warning fs-4"></i>
+          <div>
+            <div class="fw-semibold">Transactions</div>
+            <small class="text-muted">Full buy/sell history with FX rates</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="d-flex align-items-start gap-2">
+          <i class="bi bi-lightbulb-fill text-info fs-4"></i>
+          <div>
+            <div class="fw-semibold">Research</div>
+            <small class="text-muted">AI analysis history with recommendations</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,1365 @@
+{% extends "base.html" %}
+{% block title %}Research — AI Paper Trader{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-cpu me-2 text-primary"></i>AI Investment Research</h4>
+</div>
+
+<!-- Search Form -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" action="/research" class="row g-3 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label fw-semibold">Ticker Symbol</label>
+        <input type="text" name="symbol" class="form-control form-control-lg text-uppercase"
+               placeholder="AAPL, SPY, NVDA, MSFT…"
+               value="{{ symbol or '' }}" autocomplete="off" required>
+      </div>
+      <div class="col-auto d-flex align-items-end gap-3">
+        <button type="submit" class="btn btn-primary btn-lg px-4">
+          <i class="bi bi-search me-1"></i>Analyse
+        </button>
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="checkbox" name="force" value="true" id="forceChk"
+                 {% if request.query_params.get('force') == 'true' %}checked{% endif %}>
+          <label class="form-check-label small text-muted" for="forceChk">Force fresh data</label>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ error }}</div>
+{% endif %}
+
+{% if result %}
+{% set rec    = result.get('recommendation', 'HOLD') %}
+{% set conf   = result.get('confidence', 5) | int %}
+{% set raw    = result.get('raw_data', {}) %}
+{% set mkt    = raw.get('market', {}) if raw else {} %}
+{% set news_d = raw.get('news', {}) if raw else {} %}
+{% set sent_d = raw.get('sentiment', {}) if raw else {} %}
+{% set macro_d= raw.get('macro', {}) if raw else {} %}
+{% set reddit = sent_d.get('reddit', {}) if sent_d else {} %}
+{% set fund_d  = raw.get('fundamentals', {}) if raw else {} %}
+{% set ins_d   = raw.get('insiders', {}) if raw else {} %}
+{% set earn_d  = raw.get('earnings_history', {}) if raw else {} %}
+{% set rev_d   = raw.get('revisions', {}) if raw else {} %}
+{% set opts_d  = raw.get('options_iv', {}) if raw else {} %}
+{% set corr_d  = raw.get('correlation', {}) if raw else {} %}
+{% set edgar_d  = raw.get('edgar', {}) if raw else {} %}
+{% set uopts_d  = raw.get('unusual_options', {}) if raw else {} %}
+{% set sq_d     = raw.get('squeeze', {}) if raw else {} %}
+{% set stkt_d   = raw.get('stocktwits', {}) if raw else {} %}
+{% set inst_d   = raw.get('institutions', {}) if raw else {} %}
+{% set gov_d    = raw.get('gov_contracts', {}) if raw else {} %}
+{% set sec_d    = raw.get('sector_rotation', {}) if raw else {} %}
+{% set conv     = result.get('conviction', {}) if result else {} %}
+
+<!-- ── Earnings Warning ── -->
+{% set dte = mkt.get('days_until_earnings') %}
+{% if dte is not none %}
+  {% if dte < 0 and dte >= -7 %}
+  <div class="alert alert-info d-flex align-items-center mb-3">
+    <i class="bi bi-calendar-check-fill me-3 fs-5"></i>
+    <div>Earnings reported <strong>{{ -dte }} day{% if (-dte) != 1 %}s{% endif %} ago</strong> ({{ mkt.get('earnings_date','') }}) — results may not yet be fully priced in.</div>
+  </div>
+  {% elif dte >= 0 and dte <= 3 %}
+  <div class="alert alert-danger d-flex align-items-center mb-3">
+    <i class="bi bi-exclamation-octagon-fill me-3 fs-4"></i>
+    <div><strong>Earnings in {{ dte }} day{% if dte != 1 %}s{% endif %}!</strong> ({{ mkt.get('earnings_date','') }}) — Avoid new positions or reduce size significantly due to gap risk.</div>
+  </div>
+  {% elif dte <= 14 %}
+  <div class="alert alert-warning d-flex align-items-center mb-3">
+    <i class="bi bi-calendar-event-fill me-3 fs-5"></i>
+    <div><strong>Earnings in {{ dte }} days</strong> ({{ mkt.get('earnings_date','') }}) — Consider smaller position size to manage volatility risk.</div>
+  </div>
+  {% elif dte <= 30 %}
+  <div class="alert alert-secondary d-flex align-items-center mb-3 py-2">
+    <i class="bi bi-calendar me-3"></i>
+    <div class="small">Upcoming earnings: <strong>{{ mkt.get('earnings_date','') }}</strong> ({{ dte }} days away)</div>
+  </div>
+  {% endif %}
+{% endif %}
+
+<!-- ── Conviction Panel ── -->
+{% if conv and conv.get('total_signals', 0) > 0 %}
+{% set cv = conv.conviction_score | float %}
+<div class="card mb-3 border-2
+  {% if cv >= 7 %}border-success{% elif cv >= 5 %}border-warning{% else %}border-danger{% endif %}">
+  <div class="card-body py-2">
+    <div class="row align-items-center g-3">
+      <div class="col-auto text-center" style="min-width:90px">
+        <div class="fs-2 fw-bold
+          {% if cv >= 7 %}text-success{% elif cv >= 5 %}text-warning{% else %}text-danger{% endif %}">
+          {{ "%.1f" % cv }}
+        </div>
+        <div class="text-muted" style="font-size:.7rem">CONVICTION/10</div>
+        <div class="badge
+          {% if conv.direction == 'bullish' %}bg-success
+          {% elif conv.direction == 'bearish' %}bg-danger
+          {% else %}bg-warning text-dark{% endif %} mt-1">
+          {{ conv.direction | upper }}
+        </div>
+      </div>
+      <div class="col">
+        <div class="d-flex gap-2 mb-1 flex-wrap">
+          <span class="badge bg-success bg-opacity-75">{{ conv.bull_signal_count }} bull signals</span>
+          <span class="badge bg-danger bg-opacity-75">{{ conv.bear_signal_count }} bear signals</span>
+          <span class="badge bg-secondary">{{ conv.agreement_pct }}% agreement</span>
+          <span class="badge bg-info text-dark">{{ conv.data_completeness_pct | int }}% data complete</span>
+          {% if conv.has_conflict %}<span class="badge bg-warning text-dark">⚠ Conflicted signals</span>{% endif %}
+          {% if conv.do_not_trade %}<span class="badge bg-danger">⛔ DO NOT TRADE</span>{% endif %}
+        </div>
+        <div class="progress" style="height:8px;">
+          <div class="progress-bar bg-success" style="width:{{ (conv.bull_weight / (conv.bull_weight + conv.bear_weight + 0.01) * 100) | round }}%"></div>
+          <div class="progress-bar bg-danger" style="width:{{ (conv.bear_weight / (conv.bull_weight + conv.bear_weight + 0.01) * 100) | round }}%"></div>
+        </div>
+        <div class="d-flex justify-content-between mt-1">
+          <small class="text-success">{{ conv.bull_weight }}pt bull</small>
+          <small class="text-danger">{{ conv.bear_weight }}pt bear</small>
+        </div>
+      </div>
+      <!-- Signal breakdown toggle -->
+      <div class="col-auto">
+        <button class="btn btn-sm btn-outline-secondary" type="button"
+                data-bs-toggle="collapse" data-bs-target="#convSignals">
+          <i class="bi bi-list-ul me-1"></i>Signals
+        </button>
+      </div>
+    </div>
+    <div class="collapse mt-3" id="convSignals">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="small fw-semibold text-success mb-1">
+            <i class="bi bi-arrow-up-circle me-1"></i>Bull Signals
+          </div>
+          {% for name, weight, desc in conv.bull_signals %}
+          <div class="d-flex align-items-start gap-2 mb-1">
+            <span class="badge bg-success mt-1" style="font-size:.6rem;min-width:20px">{{ weight }}</span>
+            <span class="small">{{ desc }}</span>
+          </div>
+          {% endfor %}
+          {% if not conv.bull_signals %}
+          <span class="text-muted small">No bullish signals firing</span>
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <div class="small fw-semibold text-danger mb-1">
+            <i class="bi bi-arrow-down-circle me-1"></i>Bear Signals / Risk Flags
+          </div>
+          {% for name, weight, desc in conv.bear_signals %}
+          <div class="d-flex align-items-start gap-2 mb-1">
+            <span class="badge bg-danger mt-1" style="font-size:.6rem;min-width:20px">{{ weight }}</span>
+            <span class="small">{{ desc }}</span>
+          </div>
+          {% endfor %}
+          {% if not conv.bear_signals %}
+          <span class="text-muted small">No bearish signals firing</span>
+          {% endif %}
+        </div>
+      </div>
+      {% if conv.do_not_trade_flags %}
+      <div class="alert alert-danger mt-2 mb-0 py-2 small">
+        <strong>Hard stops:</strong>
+        {% for f in conv.do_not_trade_flags %}
+        <span class="badge bg-danger ms-1">{{ f.replace('_',' ') }}</span>
+        {% endfor %}
+        — Position size overridden to €0
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Correlation Warning ── -->
+{% if corr_d.get('warning') %}
+<div class="alert alert-warning d-flex align-items-start mb-3">
+  <i class="bi bi-diagram-3-fill me-3 fs-5 mt-1"></i>
+  <div>
+    <strong>Portfolio Concentration Risk</strong> — {{ symbol }} is highly correlated with existing holdings:
+    {% for s, c in corr_d.get('high_correlation_pairs', []) %}
+    <span class="badge bg-warning text-dark ms-1">{{ s }}: {{ "%.2f" % c }}</span>
+    {% endfor %}
+    <div class="small mt-1 text-muted">Correlation ≥ 0.70 means these positions tend to move together — adding {{ symbol }} may not improve diversification.</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Header Card ── -->
+<div class="card mb-3 border-2
+  {% if rec == 'BUY' %}border-success
+  {% elif rec == 'SELL' %}border-danger
+  {% else %}border-warning{% endif %}">
+  <div class="card-body">
+    <div class="row align-items-center">
+      <div class="col">
+        <h4 class="mb-1 fw-bold">{{ result.get('company_name', symbol) }}</h4>
+        <span class="text-muted">{{ symbol }}</span>
+        {% if result.get('reasoning_engine') %}
+        <span class="badge bg-secondary ms-2 small">{{ result.reasoning_engine }}</span>
+        {% endif %}
+        {% if result.get('data_quality') %}
+        <span class="badge
+          {% if result.data_quality == 'high' %}bg-success
+          {% elif result.data_quality == 'medium' %}bg-warning text-dark
+          {% else %}bg-secondary{% endif %} ms-1 small">
+          {{ result.data_quality | upper }} DATA
+        </span>
+        {% endif %}
+        {% if symbol_accuracy and symbol_accuracy.get('directional', 0) >= 3 %}
+        <div class="mt-2 small text-muted">
+          <i class="bi bi-bullseye me-1"></i>
+          <strong>{{ symbol }} track record:</strong>
+          {{ symbol_accuracy.win_rate }}% correct
+          ({{ symbol_accuracy.correct }}/{{ symbol_accuracy.directional }} calls)
+          · avg {{ "%+.1f" % symbol_accuracy.avg_return_pct if symbol_accuracy.avg_return_pct is not none else "N/A" }}%
+        </div>
+        {% endif %}
+      </div>
+      <div class="col-auto text-center">
+        <div class="display-6 fw-bold
+          {% if rec == 'BUY' %}text-success{% elif rec == 'SELL' %}text-danger{% else %}text-warning{% endif %}">
+          {{ rec }}
+        </div>
+        <div class="small text-muted mb-1">Confidence</div>
+        <div class="progress" style="width:120px; height:10px;">
+          <div class="progress-bar
+            {% if rec == 'BUY' %}bg-success{% elif rec == 'SELL' %}bg-danger{% else %}bg-warning{% endif %}"
+            style="width:{{ conf * 10 }}%"></div>
+        </div>
+        <div class="small mt-1 fw-bold
+          {% if rec == 'BUY' %}text-success{% elif rec == 'SELL' %}text-danger{% else %}text-warning{% endif %}">
+          {{ conf }}/10
+        </div>
+      </div>
+    </div>
+
+    <!-- Sources strip -->
+    {% set srcs = result.get('sources_used', []) %}
+    {% if srcs %}
+    <div class="mt-3 pt-3 border-top border-secondary-subtle">
+      <small class="text-muted me-2"><i class="bi bi-database me-1"></i>Sources:</small>
+      {% for s in srcs %}
+      <span class="badge bg-body-secondary text-body-secondary border me-1 mb-1">{{ s }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Bull / Bear / Risks / Devil's Advocate ── -->
+{% set has_devil = result.get('devil_advocate_critique') %}
+<div class="row g-3 mb-3">
+  <div class="col-lg-{% if has_devil %}3{% else %}4{% endif %}">
+    <div class="card h-100 border-success border-opacity-50">
+      <div class="card-header bg-success bg-opacity-10">
+        <i class="bi bi-arrow-up-circle-fill text-success me-2"></i><span class="fw-bold text-success">Bull Thesis</span>
+      </div>
+      <div class="card-body small">{{ result.get('bull_thesis', 'N/A') }}</div>
+    </div>
+  </div>
+  <div class="col-lg-{% if has_devil %}3{% else %}4{% endif %}">
+    <div class="card h-100 border-danger border-opacity-50">
+      <div class="card-header bg-danger bg-opacity-10">
+        <i class="bi bi-arrow-down-circle-fill text-danger me-2"></i><span class="fw-bold text-danger">Bear Thesis</span>
+      </div>
+      <div class="card-body small">{{ result.get('bear_thesis', 'N/A') }}</div>
+    </div>
+  </div>
+  <div class="col-lg-{% if has_devil %}3{% else %}4{% endif %}">
+    <div class="card h-100 border-warning border-opacity-50">
+      <div class="card-header bg-warning bg-opacity-10">
+        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i><span class="fw-bold text-warning">Key Risks</span>
+      </div>
+      <div class="card-body">
+        {% set risks = result.get('risks', []) %}
+        {% if risks %}
+        <ul class="mb-0 ps-3 small">{% for r in risks %}<li class="mb-1">{{ r }}</li>{% endfor %}</ul>
+        {% else %}<span class="text-muted small">No specific risks listed.</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% if has_devil %}
+  <div class="col-lg-3">
+    <div class="card h-100 border-secondary">
+      <div class="card-header bg-secondary bg-opacity-10">
+        <i class="bi bi-shield-exclamation me-2 text-secondary"></i><span class="fw-bold text-secondary">Devil's Advocate</span>
+      </div>
+      <div class="card-body small">
+        <p class="mb-2">{{ result.devil_advocate_critique }}</p>
+        {% set drf = result.get('devil_advocate_red_flags', []) %}
+        {% if drf %}
+        <ul class="mb-0 ps-3 text-danger-emphasis">
+          {% for f in drf %}<li class="mb-1 small">{{ f }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Quarterly Fundamentals + Insider Activity ── -->
+{% if fund_d.get('available') or ins_d.get('available') %}
+<div class="row g-3 mb-3">
+
+  {% if fund_d.get('available') %}
+  <div class="col-lg-{% if ins_d.get('available') %}7{% else %}12{% endif %}">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-graph-up-arrow me-2"></i>Quarterly Fundamentals</span>
+        {% set rt = fund_d.get('revenue_trend') %}
+        {% if rt %}
+        <span class="badge
+          {% if rt in ('accelerating','growing') %}bg-success
+          {% elif rt in ('decelerating','declining') %}bg-danger
+          {% else %}bg-secondary{% endif %} small">
+          {{ rt | upper }}
+        </span>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        {% if fund_d.get('yoy_revenue_growth_pct') is not none or fund_d.get('yoy_earnings_growth_pct') is not none %}
+        <div class="px-3 pt-2 pb-1 d-flex gap-3 border-bottom border-secondary-subtle">
+          {% if fund_d.get('yoy_revenue_growth_pct') is not none %}
+          <span class="small">YoY Rev Growth: <strong class="{% if fund_d.yoy_revenue_growth_pct >= 0 %}text-success{% else %}text-danger{% endif %}">{{ "%+.1f" % fund_d.yoy_revenue_growth_pct }}%</strong></span>
+          {% endif %}
+          {% if fund_d.get('yoy_earnings_growth_pct') is not none %}
+          <span class="small">YoY EPS Growth: <strong class="{% if fund_d.yoy_earnings_growth_pct >= 0 %}text-success{% else %}text-danger{% endif %}">{{ "%+.1f" % fund_d.yoy_earnings_growth_pct }}%</strong></span>
+          {% endif %}
+        </div>
+        {% endif %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-dark">
+              <tr>
+                <th>Quarter</th>
+                <th class="text-end">Revenue</th>
+                <th class="text-end">Net Income</th>
+                <th class="text-end">Gross Margin</th>
+                <th class="text-end">Op Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% macro fmtnum(v) %}
+                {%- if v is none %}N/A
+                {%- elif v | abs >= 1e12 %}${{ "%.2f" % (v/1e12) }}T
+                {%- elif v | abs >= 1e9  %}${{ "%.2f" % (v/1e9) }}B
+                {%- elif v | abs >= 1e6  %}${{ "%.0f" % (v/1e6) }}M
+                {%- else %}${{ "%.0f" % v }}
+                {%- endif %}
+              {% endmacro %}
+              {% for q in fund_d.get('quarters', [])[:5] %}
+              <tr>
+                <td class="small text-muted">{{ q.get('period','')[:7] }}</td>
+                <td class="text-end small">{{ fmtnum(q.get('revenue')) }}</td>
+                <td class="text-end small {% if q.get('net_income') is not none and q.net_income >= 0 %}text-success{% elif q.get('net_income') is not none %}text-danger{% endif %}">
+                  {{ fmtnum(q.get('net_income')) }}
+                </td>
+                <td class="text-end small">{{ "%.1f" % q.gross_margin_pct if q.get('gross_margin_pct') is not none else 'N/A' }}{% if q.get('gross_margin_pct') is not none %}%{% endif %}</td>
+                <td class="text-end small">{{ "%.1f" % q.operating_margin_pct if q.get('operating_margin_pct') is not none else 'N/A' }}{% if q.get('operating_margin_pct') is not none %}%{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if ins_d.get('available') %}
+  <div class="col-lg-{% if fund_d.get('available') %}5{% else %}12{% endif %}">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-person-badge me-2"></i>Insider Transactions</span>
+        {% set bias = ins_d.get('net_bias','neutral') %}
+        <span class="badge {% if bias == 'bullish' %}bg-success{% elif bias == 'bearish' %}bg-danger{% else %}bg-secondary{% endif %} small">
+          {{ bias | upper }}
+          <span class="ms-1">{{ ins_d.get('buy_count',0) }}B / {{ ins_d.get('sell_count',0) }}S</span>
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-dark">
+              <tr><th>Date</th><th>Insider</th><th>Type</th><th class="text-end">Shares</th></tr>
+            </thead>
+            <tbody>
+              {% for t in ins_d.get('transactions', [])[:8] %}
+              {% set is_buy = 'purchase' in t.get('transaction','').lower() or 'buy' in t.get('transaction','').lower() or 'acquisition' in t.get('transaction','').lower() %}
+              <tr>
+                <td class="small text-muted">{{ t.get('date','')[:7] }}</td>
+                <td class="small">
+                  <div>{{ t.get('insider','')[:22] }}</div>
+                  <div class="text-muted" style="font-size:.7rem">{{ t.get('relation','')[:20] }}</div>
+                </td>
+                <td class="small {% if is_buy %}text-success{% else %}text-danger{% endif %}">
+                  {{ t.get('transaction','')[:12] }}
+                </td>
+                <td class="text-end small">
+                  {{ "{:,}".format(t.get('shares',0)) }}
+                  {% if t.get('value_usd') and t.value_usd >= 1e6 %}
+                  <div class="text-muted" style="font-size:.7rem">${{ "%.1f" % (t.value_usd/1e6) }}M</div>
+                  {% elif t.get('value_usd') and t.value_usd >= 1000 %}
+                  <div class="text-muted" style="font-size:.7rem">${{ "%.0f" % (t.value_usd/1000) }}K</div>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}
+
+<!-- ── Institutions + Government Contracts ── -->
+{% if inst_d.get('available') or gov_d.get('available') %}
+<div class="row g-3 mb-3">
+
+  {% if inst_d.get('available') %}
+  <div class="col-lg-{% if gov_d.get('available') %}6{% else %}12{% endif %}">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-bank me-2"></i>Institutional Ownership</span>
+        {% if inst_d.get('inst_pct') is not none %}
+        <span class="badge bg-secondary small">{{ inst_d.inst_pct }}% held</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div class="row g-2 text-center mb-3">
+          <div class="col-4">
+            <div class="fw-bold fs-5">{{ inst_d.inst_pct or 'N/A' }}%</div>
+            <div class="text-muted" style="font-size:.7rem">Institutional</div>
+          </div>
+          <div class="col-4">
+            <div class="fw-bold fs-5">{{ inst_d.insider_pct or 'N/A' }}%</div>
+            <div class="text-muted" style="font-size:.7rem">Insider</div>
+          </div>
+          <div class="col-4">
+            <div class="fw-bold fs-5">{{ inst_d.recent_filers }}</div>
+            <div class="text-muted" style="font-size:.7rem">Recent filers</div>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr class="table-secondary"><th style="font-size:.7rem">Institution</th><th class="text-end" style="font-size:.7rem">% Owned</th><th class="text-end" style="font-size:.7rem">Filed</th></tr></thead>
+            <tbody>
+              {% for h in inst_d.get('holders', [])[:8] %}
+              <tr>
+                <td style="font-size:.72rem">{{ h.name[:28] }}</td>
+                <td class="text-end" style="font-size:.72rem">{{ h.pct_out or '—' }}%</td>
+                <td class="text-end text-muted" style="font-size:.72rem">{{ h.date[:7] if h.date else '' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if gov_d.get('available') %}
+  <div class="col-lg-{% if inst_d.get('available') %}6{% else %}12{% endif %}">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-building me-2"></i>Government Contracts
+          <span class="badge bg-secondary ms-1">{{ gov_d.contract_count }}</span>
+        </span>
+        <span class="small text-success fw-bold">
+          ${{ "%.1f" % (gov_d.total_value / 1e6) }}M total
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-dark">
+            <tr><th>Date</th><th>Value</th><th>Agency</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            {% for c in gov_d.get('contracts', [])[:6] %}
+            <tr>
+              <td class="small text-muted">{{ c.date[:7] if c.date else '' }}</td>
+              <td class="small text-success">${{ "%.1f" % (c.amount / 1e6) }}M</td>
+              <td class="small text-muted">{{ c.agency[:20] }}</td>
+              <td class="small">{{ c.desc[:40] }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}
+
+<!-- ── Earnings History + Analyst Revisions ── -->
+{% if earn_d.get('available') or rev_d.get('available') %}
+<div class="row g-3 mb-3">
+
+  {% if earn_d.get('available') %}
+  <div class="col-lg-{% if rev_d.get('available') %}7{% else %}12{% endif %}">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-calendar2-check me-2"></i>Earnings Surprise History</span>
+        <div class="d-flex align-items-center gap-2">
+          {% if earn_d.get('streak') %}
+          <span class="badge {% if 'beat' in earn_d.streak %}bg-success{% else %}bg-danger{% endif %} small">{{ earn_d.streak }}</span>
+          {% endif %}
+          {% if earn_d.get('beat_rate') is not none %}
+          <span class="badge {% if earn_d.beat_rate >= 75 %}bg-success{% elif earn_d.beat_rate >= 50 %}bg-warning text-dark{% else %}bg-danger{% endif %} small">
+            {{ earn_d.beat_rate }}% beat rate
+          </span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card-body p-0">
+        {% if earn_d.get('avg_surprise_pct') is not none %}
+        <div class="px-3 pt-2 pb-1 border-bottom border-secondary-subtle small text-muted">
+          Avg EPS surprise: <strong class="{% if earn_d.avg_surprise_pct >= 0 %}text-success{% else %}text-danger{% endif %}">{{ "%+.2f" % earn_d.avg_surprise_pct }}%</strong>
+        </div>
+        {% endif %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-dark">
+              <tr><th>Quarter</th><th class="text-end">Estimate</th><th class="text-end">Actual</th><th class="text-end">Surprise</th><th class="text-center">Result</th></tr>
+            </thead>
+            <tbody>
+              {% for q in earn_d.get('quarters', [])[:8] %}
+              <tr>
+                <td class="small text-muted">{{ q.get('period','')[:7] }}</td>
+                <td class="text-end small">${{ "%.2f" % q.eps_estimate if q.get('eps_estimate') is not none else 'N/A' }}</td>
+                <td class="text-end small fw-semibold">{{ ("$%.2f" % q.eps_actual) if q.get('eps_actual') is not none else 'N/A' }}</td>
+                <td class="text-end small {% if (q.get('surprise_pct') or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">
+                  {{ ("%+.2f" % q.surprise_pct + "%") if q.get('surprise_pct') is not none else 'N/A' }}
+                </td>
+                <td class="text-center">
+                  {% if q.get('beat') is not none %}
+                  <span class="badge {% if q.beat %}bg-success{% else %}bg-danger{% endif %}">
+                    {% if q.beat %}Beat{% else %}Miss{% endif %}
+                  </span>
+                  {% else %}<span class="text-muted small">—</span>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if rev_d.get('available') %}
+  <div class="col-lg-{% if earn_d.get('available') %}5{% else %}12{% endif %}">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-pencil-square me-2"></i>Analyst Revisions</span>
+        {% set mom = rev_d.get('momentum','neutral') %}
+        <span class="badge
+          {% if 'positive' in mom %}bg-success
+          {% elif 'negative' in mom %}bg-danger
+          {% else %}bg-secondary{% endif %} small">
+          {{ mom | upper }}
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="row text-center g-2 mb-3">
+          <div class="col-6">
+            <div class="fw-bold fs-5 text-success">↑{{ rev_d.get('upgrades_30d',0) }}</div>
+            <div class="text-muted" style="font-size:.75rem">Upgrades (30d)</div>
+          </div>
+          <div class="col-6">
+            <div class="fw-bold fs-5 text-danger">↓{{ rev_d.get('downgrades_30d',0) }}</div>
+            <div class="text-muted" style="font-size:.75rem">Downgrades (30d)</div>
+          </div>
+          <div class="col-6">
+            <div class="fw-bold text-success">↑{{ rev_d.get('upgrades_90d',0) }}</div>
+            <div class="text-muted" style="font-size:.7rem">Upgrades (90d)</div>
+          </div>
+          <div class="col-6">
+            <div class="fw-bold text-danger">↓{{ rev_d.get('downgrades_90d',0) }}</div>
+            <div class="text-muted" style="font-size:.7rem">Downgrades (90d)</div>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr class="table-secondary"><th style="font-size:.7rem">Date</th><th style="font-size:.7rem">Firm</th><th style="font-size:.7rem">Change</th></tr></thead>
+            <tbody>
+              {% for r in rev_d.get('recent', [])[:8] %}
+              <tr>
+                <td class="text-muted" style="font-size:.72rem">{{ r.get('date','')[:7] }}</td>
+                <td style="font-size:.72rem">{{ r.get('firm','')[:18] }}</td>
+                <td style="font-size:.72rem">
+                  {% if r.get('from_grade') %}
+                  <span class="text-muted">{{ r.from_grade[:12] }}</span> →
+                  {% endif %}
+                  <span class="{% if r.direction == 'bullish' %}text-success{% elif r.direction == 'bearish' %}text-danger{% endif %} fw-semibold">
+                    {{ r.get('to_grade','')[:12] }}
+                  </span>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}
+
+<!-- ── Market + Sentiment + Macro row ── -->
+<div class="row g-3 mb-3">
+
+  <!-- Market Snapshot -->
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-bar-chart-line me-2"></i>Market Snapshot</div>
+      <div class="card-body p-0">
+        {% macro mval(k, fmt='.2f', prefix='', suffix='') %}
+          {%- set v = mkt.get(k) -%}
+          {%- if v is not none %}{{ prefix }}{{ v | float | round(4) | string }}{{ suffix }}{% else %}N/A{% endif -%}
+        {% endmacro %}
+        <table class="table table-sm table-hover mb-0">
+          <tbody>
+            {% set price   = mkt.get('price_usd') %}
+            {% set chg     = mkt.get('change_pct') or 0 %}
+            {% set chg1w   = mkt.get('change_1w_pct') %}
+            {% set chg1m   = mkt.get('change_1m_pct') %}
+            {% set chg3m   = mkt.get('change_3m_pct') %}
+            {% set rsi     = mkt.get('rsi_14') %}
+            {% set pe      = mkt.get('pe_ratio') %}
+            {% set fpe     = mkt.get('forward_pe') %}
+            {% set beta    = mkt.get('beta') %}
+            {% set revg    = mkt.get('revenue_growth') %}
+            {% set tgt     = mkt.get('target_mean_price') %}
+            {% set tup     = mkt.get('target_upside_pct') %}
+            {% set s200    = mkt.get('price_vs_sma200_pct') %}
+            {% set low52   = mkt.get('low_52w') %}
+            {% set high52  = mkt.get('high_52w') %}
+            <tr><td class="text-muted">Price</td>
+              <td class="text-end fw-bold">
+                {% if price %}${{ "%.2f" % price }}{% else %}N/A{% endif %}
+                <span class="{% if chg >= 0 %}text-success{% else %}text-danger{% endif %} ms-1 small">
+                  {{ "%+.2f" % chg }}%
+                </span>
+              </td>
+            </tr>
+            <tr><td class="text-muted">1W / 1M / 3M</td>
+              <td class="text-end small">
+                <span class="{% if (chg1w or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">{{ "%+.1f" % chg1w if chg1w is not none else 'N/A' }}%</span> /
+                <span class="{% if (chg1m or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">{{ "%+.1f" % chg1m if chg1m is not none else 'N/A' }}%</span> /
+                <span class="{% if (chg3m or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">{{ "%+.1f" % chg3m if chg3m is not none else 'N/A' }}%</span>
+              </td>
+            </tr>
+            <tr><td class="text-muted">52w Range</td>
+              <td class="text-end small">
+                {% if low52 and high52 %}${{ "%.2f" % low52 }} – ${{ "%.2f" % high52 }}{% else %}N/A{% endif %}
+              </td>
+            </tr>
+            <tr><td class="text-muted">RSI (14)</td>
+              <td class="text-end {% if rsi and rsi < 35 %}text-success{% elif rsi and rsi > 70 %}text-danger{% endif %}">
+                {{ "%.1f" % rsi if rsi else 'N/A' }}
+              </td>
+            </tr>
+            <tr><td class="text-muted">P/E / Fwd P/E</td>
+              <td class="text-end">{{ "%.1f" % pe if pe else 'N/A' }} / {{ "%.1f" % fpe if fpe else 'N/A' }}</td>
+            </tr>
+            <tr><td class="text-muted">Beta</td><td class="text-end">{{ "%.2f" % beta if beta else 'N/A' }}</td></tr>
+            <tr><td class="text-muted">Rev Growth</td>
+              <td class="text-end {% if (revg or 0) > 0 %}text-success{% elif (revg or 0) < 0 %}text-danger{% endif %}">
+                {% if revg is not none %}{{ "%+.1f" % (revg * 100) }}%{% else %}N/A{% endif %}
+              </td>
+            </tr>
+            <tr><td class="text-muted">Analyst Target</td>
+              <td class="text-end">
+                {% if tgt %}${{ "%.2f" % tgt }}{% else %}N/A{% endif %}
+                {% if tup is not none %}<span class="{% if tup >= 0 %}text-success{% else %}text-danger{% endif %} small">({{ "%+.1f" % tup }}%)</span>{% endif %}
+              </td>
+            </tr>
+            <tr><td class="text-muted">SMA200 Distance</td>
+              <td class="text-end {% if (s200 or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">
+                {% if s200 is not none %}{{ "%+.1f" % s200 }}%{% else %}N/A{% endif %}
+              </td>
+            </tr>
+            {% set setf = mkt.get('sector_etf') %}
+            {% if setf %}
+            {% set rs1m = mkt.get('rel_strength_1m_pct') %}
+            <tr>
+              <td class="text-muted">vs {{ setf }} (sector)</td>
+              <td class="text-end">
+                <span class="small text-muted">{{ "%+.1f" % mkt.get('sector_etf_1m_pct') if mkt.get('sector_etf_1m_pct') is not none else 'N/A' }}% ETF</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="text-muted">Rel Strength 1M</td>
+              <td class="text-end fw-semibold {% if (rs1m or 0) > 0 %}text-success{% elif (rs1m or 0) < 0 %}text-danger{% endif %}">
+                {% if rs1m is not none %}{{ "%+.1f" % rs1m }}%{% else %}N/A{% endif %}
+                <span class="small text-muted ms-1">{% if (rs1m or 0) > 0 %}▲ outperform{% elif (rs1m or 0) < 0 %}▼ underperform{% endif %}</span>
+              </td>
+            </tr>
+            {% endif %}
+            {% if mkt.get('earnings_date') %}
+            <tr>
+              <td class="text-muted">Next Earnings</td>
+              <td class="text-end small {% if (mkt.get('days_until_earnings') or 999) <= 7 %}text-danger fw-bold{% elif (mkt.get('days_until_earnings') or 999) <= 30 %}text-warning{% endif %}">
+                {{ mkt.get('earnings_date','') }}
+                ({% if mkt.get('days_until_earnings') is not none %}{{ mkt.days_until_earnings }}d{% else %}N/A{% endif %})
+              </td>
+            </tr>
+            {% endif %}
+            {% if opts_d.get('available') %}
+            <tr>
+              <td class="text-muted">Options IV (ATM)</td>
+              <td class="text-end small
+                {% if opts_d.signal == 'expensive' %}text-danger
+                {% elif opts_d.signal == 'cheap' %}text-success
+                {% else %}text-body{% endif %}">
+                {{ opts_d.atm_iv_pct }}%
+                <span class="badge
+                  {% if opts_d.signal == 'expensive' %}bg-danger
+                  {% elif opts_d.signal == 'cheap' %}bg-success
+                  {% else %}bg-secondary{% endif %} ms-1" style="font-size:.65rem">
+                  {{ opts_d.signal | upper }}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td class="text-muted">Expected 1W Move</td>
+              <td class="text-end small">±{{ opts_d.expected_move_pct }}%</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sentiment + Macro -->
+  <div class="col-lg-7">
+    <div class="row g-3 h-100">
+
+      <!-- Sentiment -->
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-header"><i class="bi bi-emoji-smile me-2"></i>Sentiment</div>
+          <div class="card-body">
+            {% set overall_s = sent_d.get('overall_score', 0) | float %}
+            <div class="text-center mb-3">
+              <div class="fs-4 fw-bold
+                {% if overall_s >= 0.05 %}text-success{% elif overall_s <= -0.05 %}text-danger{% else %}text-muted{% endif %}">
+                {{ sent_d.get('overall_label', 'neutral') | title }}
+              </div>
+              <div class="small text-muted">Score: {{ "%.3f" % overall_s }}</div>
+              <div class="progress mt-2" style="height:8px;">
+                <div class="progress-bar {% if overall_s >= 0 %}bg-success{% else %}bg-danger{% endif %}"
+                  style="width:{{ [((overall_s + 1) / 2 * 100) | round, 100] | min }}%"></div>
+              </div>
+              <div class="d-flex justify-content-between mt-1">
+                <small class="text-danger">Bearish</small>
+                <small class="text-success">Bullish</small>
+              </div>
+            </div>
+
+            <table class="table table-sm mb-0">
+              <tr>
+                <td class="text-muted small"><i class="bi bi-newspaper me-1"></i>News</td>
+                <td class="text-end small
+                  {% if (sent_d.get('news_sentiment_score') or 0) >= 0.05 %}text-success
+                  {% elif (sent_d.get('news_sentiment_score') or 0) <= -0.05 %}text-danger
+                  {% else %}text-muted{% endif %}">
+                  {{ "%.3f" % sent_d.get('news_sentiment_score', 0) }}
+                  ({{ news_d.get('article_count', 0) }} articles)
+                </td>
+              </tr>
+              {% if stkt_d.get('available') %}
+              <tr>
+                <td class="text-muted small"><i class="bi bi-chat-dots me-1"></i>StockTwits</td>
+                <td class="text-end small
+                  {% if (stkt_d.bull_ratio or 0.5) >= 0.65 %}text-success
+                  {% elif (stkt_d.bull_ratio or 0.5) <= 0.35 %}text-danger
+                  {% else %}text-muted{% endif %}">
+                  {{ "%.0f" % ((stkt_d.bull_ratio or 0.5) * 100) }}% bull
+                  <span class="text-muted">({{ stkt_d.total_messages }} msgs)</span>
+                </td>
+              </tr>
+              {% endif %}
+              {% if reddit.get('available') %}
+              <tr>
+                <td class="text-muted small"><i class="bi bi-reddit me-1"></i>Reddit</td>
+                <td class="text-end small
+                  {% if (reddit.get('avg_sentiment') or 0) >= 0.05 %}text-success
+                  {% elif (reddit.get('avg_sentiment') or 0) <= -0.05 %}text-danger
+                  {% else %}text-muted{% endif %}">
+                  {{ "%.3f" % reddit.get('avg_sentiment', 0) }}
+                  ({{ reddit.get('post_count', 0) }} posts)
+                </td>
+              </tr>
+              <tr>
+                <td class="text-muted small">Subreddits</td>
+                <td class="text-end small text-muted">
+                  {% for sub in reddit.get('subreddits', []) %}r/{{ sub }}{% if not loop.last %}, {% endif %}{% endfor %}
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="2" class="text-muted small"><i class="bi bi-reddit me-1"></i>Reddit: unavailable</td>
+              </tr>
+              {% endif %}
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Macro -->
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-header"><i class="bi bi-globe-americas me-2"></i>Macro Context</div>
+          <div class="card-body">
+            {% if macro_d %}
+            {% set m_regime = macro_d.get('market_regime', '') %}
+            <div class="fw-semibold small mb-2
+              {% if 'bullish' in m_regime %}text-success
+              {% elif 'bearish' in m_regime %}text-danger
+              {% else %}text-warning{% endif %}">
+              {{ m_regime | title or 'N/A' }}
+            </div>
+            <table class="table table-sm mb-0">
+              {% set m_vix = macro_d.get('vix') %}
+              {% if m_vix %}
+              <tr>
+                <td class="text-muted small">VIX</td>
+                <td class="text-end small
+                  {% if m_vix < 18 %}text-success{% elif m_vix > 28 %}text-danger{% else %}text-body{% endif %}">
+                  {{ "%.1f" % m_vix }} — {{ macro_d.get('vix_signal','') }}
+                </td>
+              </tr>
+              {% endif %}
+              {% set m_y10 = macro_d.get('ten_year_yield_pct') %}
+              {% if m_y10 %}
+              <tr>
+                <td class="text-muted small">10Y Yield</td>
+                <td class="text-end small">{{ "%.2f" % m_y10 }}%</td>
+              </tr>
+              {% endif %}
+              {% set m_ycsig = macro_d.get('yield_curve_signal', '') %}
+              {% if m_ycsig %}
+              <tr>
+                <td class="text-muted small">Yield Curve</td>
+                <td class="text-end small {% if 'inverted' in m_ycsig %}text-danger{% else %}text-success{% endif %}">
+                  {{ m_ycsig[:30] }}
+                </td>
+              </tr>
+              {% endif %}
+              {% set m_sp = macro_d.get('sp500_1m_pct') %}
+              {% if m_sp is not none %}
+              <tr>
+                <td class="text-muted small">S&amp;P 500 1M</td>
+                <td class="text-end small {% if m_sp >= 0 %}text-success{% else %}text-danger{% endif %}">
+                  {{ "%+.2f" % m_sp }}%
+                </td>
+              </tr>
+              {% endif %}
+              {% set m_ff = macro_d.get('fed_funds_rate_pct') %}
+              {% if m_ff %}
+              <tr>
+                <td class="text-muted small">Fed Funds</td>
+                <td class="text-end small">{{ "%.2f" % m_ff }}%</td>
+              </tr>
+              {% endif %}
+              {% set m_cpi = macro_d.get('cpi_yoy_pct') %}
+              {% if m_cpi %}
+              <tr>
+                <td class="text-muted small">CPI (YoY)</td>
+                <td class="text-end small">{{ "%.1f" % m_cpi }}%</td>
+              </tr>
+              {% endif %}
+            </table>
+
+            {% if result.get('macro_impact') %}
+            <div class="mt-2 small text-muted border-top border-secondary-subtle pt-2">
+              <i class="bi bi-info-circle me-1"></i>{{ result.macro_impact }}
+            </div>
+            {% endif %}
+            {% if sec_d.get('available') %}
+            {% set stock_etf = mkt.get('sector_etf') %}
+            {% set hot = sec_d.get('hot_sectors', []) %}
+            {% set cold = sec_d.get('cold_sectors', []) %}
+            {% if stock_etf %}
+            <div class="mt-2 small border-top border-secondary-subtle pt-2">
+              <div class="text-muted mb-1">Sector Rotation:</div>
+              <span class="badge
+                {% if stock_etf in hot %}bg-success
+                {% elif stock_etf in cold %}bg-danger
+                {% else %}bg-secondary{% endif %} me-1">
+                {{ stock_etf }}
+                {% if stock_etf in hot %}↑ HOT{% elif stock_etf in cold %}↓ COLD{% else %}neutral{% endif %}
+              </span>
+              {% for s in hot if s != stock_etf %}
+              <span class="badge bg-success bg-opacity-50 me-1" style="font-size:.65rem">{{ s }}↑</span>
+              {% endfor %}
+            </div>
+            {% endif %}
+            {% endif %}
+            {% else %}
+            <div class="text-muted small">Macro data unavailable.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /inner row -->
+  </div>
+
+</div><!-- /row -->
+
+<!-- ── News Headlines ── -->
+{% set articles = news_d.get('articles', []) %}
+{% if articles %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-newspaper me-2"></i>News Headlines
+      <span class="badge bg-secondary ms-1">{{ news_d.get('article_count', articles | length) }}</span>
+    </span>
+    <small class="text-muted">
+      Avg sentiment: <span class="fw-bold
+        {% if (news_d.get('avg_sentiment') or 0) >= 0.05 %}text-success
+        {% elif (news_d.get('avg_sentiment') or 0) <= -0.05 %}text-danger
+        {% else %}text-muted{% endif %}">
+        {{ "%.3f" % news_d.get('avg_sentiment', 0) }} ({{ news_d.get('sentiment_label', 'neutral') }})
+      </span>
+    </small>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Headline</th>
+          <th>Source</th>
+          <th>Date</th>
+          <th class="text-center">Sentiment</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in articles[:15] %}
+        <tr>
+          <td class="small">
+            {% if a.url %}
+            <a href="{{ a.url }}" target="_blank" rel="noopener" class="text-decoration-none">{{ a.title[:110] }}</a>
+            {% else %}{{ a.title[:110] }}{% endif %}
+          </td>
+          <td class="small text-muted">{{ a.get('source','')[:20] }}</td>
+          <td class="small text-muted">{{ a.get('date','') }}</td>
+          <td class="text-center">
+            {% set s = a.get('sentiment', 0) %}
+            <span class="badge
+              {% if s >= 0.35 %}bg-success
+              {% elif s >= 0.05 %}bg-success bg-opacity-50
+              {% elif s <= -0.35 %}bg-danger
+              {% elif s <= -0.05 %}bg-danger bg-opacity-50
+              {% else %}bg-secondary{% endif %}">
+              {{ "%+.2f" % s }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Reddit Posts ── -->
+{% if reddit.get('available') and reddit.get('top_posts') %}
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="bi bi-reddit me-2"></i>Top Reddit Posts
+    <span class="badge bg-secondary ms-1">{{ reddit.get('post_count', 0) }} posts found</span>
+    <small class="text-muted ms-2">Weighted sentiment: {{ "%.3f" % reddit.get('avg_sentiment', 0) }} ({{ reddit.get('sentiment_label','') }})</small>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Title</th>
+          <th>Subreddit</th>
+          <th class="text-end">Score</th>
+          <th class="text-end">Comments</th>
+          <th class="text-center">Sentiment</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in reddit.get('top_posts', []) %}
+        <tr>
+          <td class="small">{{ p.get('title','')[:100] }}</td>
+          <td class="small text-muted">r/{{ p.get('subreddit','') }}</td>
+          <td class="text-end small">{{ "{:,}".format(p.get('score', 0)) }}</td>
+          <td class="text-end small">{{ "{:,}".format(p.get('comments', 0)) }}</td>
+          <td class="text-center">
+            {% set s = p.get('sentiment', 0) %}
+            <span class="badge {% if s >= 0.05 %}bg-success{% elif s <= -0.05 %}bg-danger{% else %}bg-secondary{% endif %}">
+              {{ "%+.2f" % s }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── EDGAR / Squeeze / Unusual Options row ── -->
+{% if edgar_d.get('available') or (sq_d.get('score') or 0) >= 30 or uopts_d.get('is_unusual') %}
+<div class="row g-3 mb-3">
+
+  {% if edgar_d.get('available') %}
+  <div class="col-lg-{% if uopts_d.get('is_unusual') %}6{% else %}12{% endif %}">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-file-earmark-text me-2"></i>SEC EDGAR 8-K Filings
+          <span class="badge bg-secondary ms-1">{{ edgar_d.count }} in 60 days</span>
+        </span>
+        <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={{ symbol }}&type=8-K&dateb=&owner=include&count=10"
+           target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary py-0 px-2">
+          <i class="bi bi-box-arrow-up-right"></i>
+        </a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-dark">
+            <tr><th>Date</th><th>Form</th><th>Items / Description</th></tr>
+          </thead>
+          <tbody>
+            {% for f in edgar_d.get('filings', [])[:8] %}
+            <tr>
+              <td class="small text-muted">{{ f.get('date','') }}</td>
+              <td class="small">{{ f.get('form','') }}</td>
+              <td class="small">
+                <a href="{{ f.get('url','#') }}" target="_blank" rel="noopener"
+                   class="text-decoration-none text-body">
+                  {{ f.get('items','')[:60] }}
+                  {% if not f.get('items') %}{{ f.get('description','')[:60] }}{% endif %}
+                  <i class="bi bi-box-arrow-up-right ms-1 text-muted" style="font-size:.7rem"></i>
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if (sq_d.get('score') or 0) >= 30 or uopts_d.get('is_unusual') %}
+  <div class="col-lg-{% if edgar_d.get('available') %}6{% else %}12{% endif %}">
+    <div class="row g-3 h-100">
+
+      {% if (sq_d.get('score') or 0) >= 30 %}
+      <div class="col-12">
+        <div class="card border-{% if (sq_d.score or 0) >= 70 %}danger{% elif (sq_d.score or 0) >= 50 %}warning{% else %}secondary{% endif %}">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <span><i class="bi bi-fire me-2 {% if (sq_d.score or 0) >= 70 %}text-danger{% else %}text-warning{% endif %}"></i>Short Squeeze Detector</span>
+            <span class="badge {% if (sq_d.score or 0) >= 70 %}bg-danger{% elif (sq_d.score or 0) >= 50 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+              {{ sq_d.level | upper if sq_d.get('level') else '' }} — {{ sq_d.score }}/100
+            </span>
+          </div>
+          <div class="card-body small">
+            <div class="row g-2 text-center mb-2">
+              <div class="col-6">
+                <div class="fw-bold {% if (sq_d.short_pct or 0) >= 20 %}text-danger{% endif %}">{{ sq_d.short_pct or 'N/A' }}%</div>
+                <div class="text-muted" style="font-size:.7rem">Float Short</div>
+              </div>
+              <div class="col-6">
+                <div class="fw-bold">{{ sq_d.days_to_cover or 'N/A' }}d</div>
+                <div class="text-muted" style="font-size:.7rem">Days to Cover</div>
+              </div>
+            </div>
+            {% for sig in sq_d.get('signals', []) %}
+            <div class="text-muted mb-1">• {{ sig }}</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if uopts_d.get('is_unusual') %}
+      <div class="col-12">
+        <div class="card border-warning">
+          <div class="card-header">
+            <i class="bi bi-activity me-2 text-warning"></i>Unusual Options Activity
+            <span class="badge bg-warning text-dark ms-1">{{ uopts_d.signal | upper if uopts_d.get('signal') else '' }}</span>
+          </div>
+          <div class="card-body small">
+            <div class="row g-2 text-center mb-2">
+              <div class="col-4">
+                <div class="fw-bold text-success">{{ "{:,}".format(uopts_d.total_call_vol) }}</div>
+                <div class="text-muted" style="font-size:.7rem">Call Vol</div>
+              </div>
+              <div class="col-4">
+                <div class="fw-bold text-danger">{{ "{:,}".format(uopts_d.total_put_vol) }}</div>
+                <div class="text-muted" style="font-size:.7rem">Put Vol</div>
+              </div>
+              <div class="col-4">
+                <div class="fw-bold">{{ uopts_d.call_put_ratio }}</div>
+                <div class="text-muted" style="font-size:.7rem">C/P Ratio</div>
+              </div>
+            </div>
+            <div class="text-muted">{{ uopts_d.signal_label }}</div>
+            {% if uopts_d.get('unusual_calls') %}
+            <div class="mt-2">
+              <div class="text-muted mb-1" style="font-size:.72rem">Notable call strikes:</div>
+              {% for c in uopts_d.unusual_calls[:3] %}
+              <div style="font-size:.72rem">${{ c.strike }} exp {{ c.expiry }} — vol {{ "{:,}".format(c.volume) }} ({{ c.vol_oi }}x OI)</div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}
+
+<!-- ── Trade Action ── -->
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-cash-coin me-2"></i>Trade Decision</div>
+  <div class="card-body">
+    <div class="row g-3 mb-3">
+      <!-- Position sizing -->
+      <div class="col-sm-3 col-6 text-center">
+        <div class="text-muted small mb-1">
+          {% if result.get('kelly_inputs') %}
+          <i class="bi bi-calculator me-1"></i>Kelly Position
+          {% else %}
+          Suggested Position
+          {% endif %}
+        </div>
+        <div class="fs-4 fw-bold text-primary">{{ result.get('suggested_position_size_eur', 0) | eur }}</div>
+        {% if result.get('kelly_inputs') %}
+        {% set ki = result.kelly_inputs %}
+        <div class="text-muted" style="font-size:.7rem">
+          ½-Kelly {{ "%.1f" % (ki.half_kelly_fraction * 100) }}% · WR {{ ki.win_rate }}% · n={{ ki.sample_size }}
+        </div>
+        {% endif %}
+      </div>
+      <!-- Entry condition -->
+      <div class="col-sm-9 col-12">
+        {% if result.get('entry_condition') %}
+        <div class="text-muted small mb-1"><i class="bi bi-crosshair me-1"></i>Entry Condition</div>
+        <div class="small fw-semibold">{{ result.entry_condition }}</div>
+        {% endif %}
+        {% if result.get('catalyst') %}
+        <div class="text-muted small mt-2 mb-1"><i class="bi bi-lightning-charge me-1"></i>Catalyst</div>
+        <div class="small">{{ result.catalyst }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="row g-3 align-items-center">
+      {% if result.get('stop_loss_usd') %}
+      <div class="col-auto">
+        <div class="text-muted small">Stop Loss</div>
+        <div class="fw-bold text-danger">${{ "%.2f" % result.stop_loss_usd }}</div>
+      </div>
+      <div class="col-auto text-muted">→</div>
+      {% endif %}
+      {% if result.get('take_profit_usd') %}
+      <div class="col-auto">
+        <div class="text-muted small">Take Profit</div>
+        <div class="fw-bold text-success">${{ "%.2f" % result.take_profit_usd }}</div>
+      </div>
+      {% endif %}
+      {% if result.get('stop_loss_usd') and result.get('take_profit_usd') and raw.get('market',{}).get('price_usd') %}
+      {% set p = raw.market.price_usd %}
+      {% set risk = p - result.stop_loss_usd %}
+      {% set reward = result.take_profit_usd - p %}
+      {% if risk > 0 and reward > 0 %}
+      <div class="col-auto">
+        <div class="text-muted small">R/R Ratio</div>
+        <div class="fw-bold {% if (reward/risk) >= 2 %}text-success{% elif (reward/risk) >= 1 %}text-warning{% else %}text-danger{% endif %}">
+          1 : {{ "%.1f" % (reward/risk) }}
+        </div>
+      </div>
+      {% endif %}
+      {% endif %}
+      <div class="col-auto">
+        <div class="text-muted small">Time Horizon</div>
+        <div class="small fw-semibold">{{ result.get('time_horizon', 'N/A') }}</div>
+      </div>
+      <div class="col-auto">
+        <div class="text-muted small">Small Account</div>
+        <div>{% if result.get('suitable_for_small_account') %}<span class="badge bg-success">Suitable</span>{% else %}<span class="badge bg-danger">Caution</span>{% endif %}</div>
+      </div>
+      <div class="col-auto ms-auto">
+        <a href="/trade" class="btn btn-lg
+          {% if rec == 'BUY' %}btn-success{% elif rec == 'SELL' %}btn-danger{% else %}btn-outline-secondary{% endif %}">
+          <i class="bi bi-arrow-left-right me-2"></i>Go to Trade
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endif %}{# end result #}
+
+<!-- ── Research History ── -->
+{% if history %}
+<div class="card">
+  <div class="card-header"><i class="bi bi-journal-text me-2"></i>Research History</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0 align-middle">
+        <thead class="table-dark">
+          <tr>
+            <th>Date</th><th>Symbol</th><th>Company</th>
+            <th class="text-center">Rec</th><th class="text-center">Conf</th>
+            <th>Bull Thesis (excerpt)</th><th>Sources</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in history %}
+          <tr>
+            <td class="text-muted small">{{ (r.get('created_at') or '')[:10] }}</td>
+            <td class="fw-bold">{{ r.symbol }}</td>
+            <td class="small text-muted">{{ (r.get('company_name') or '')[:24] }}</td>
+            <td class="text-center">
+              <span class="badge
+                {% if r.recommendation == 'BUY' %}bg-success
+                {% elif r.recommendation == 'SELL' %}bg-danger
+                {% else %}bg-warning text-dark{% endif %}">
+                {{ r.recommendation }}
+              </span>
+            </td>
+            <td class="text-center small">{{ r.get('confidence','') }}/10</td>
+            <td class="small text-muted">
+              {{ (r.get('bull_thesis') or '')[:70] }}{% if (r.get('bull_thesis') or '') | length > 70 %}…{% endif %}
+            </td>
+            <td class="small text-muted">
+              {% set srcs = r.get('sources_used', []) %}
+              {{ srcs | length }} source{% if srcs | length != 1 %}s{% endif %}
+            </td>
+            <td>
+              <a href="/research?symbol={{ r.symbol }}&force=true"
+                 class="btn btn-sm btn-outline-secondary py-0 px-2"
+                 title="Re-analyse">
+                <i class="bi bi-arrow-clockwise"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── AI Track Record ── -->
+{% if overall_accuracy and overall_accuracy.get('total', 0) > 0 %}
+<div class="card mt-3">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-bullseye me-2"></i>AI Track Record</span>
+    <span class="badge bg-secondary small">{{ overall_accuracy.total }} predictions evaluated</span>
+  </div>
+  <div class="card-body">
+    <div class="row text-center g-3 mb-3">
+      <div class="col-sm-3 col-6">
+        <div class="fs-3 fw-bold
+          {% if (overall_accuracy.win_rate or 0) >= 60 %}text-success
+          {% elif (overall_accuracy.win_rate or 0) >= 45 %}text-warning
+          {% else %}text-danger{% endif %}">
+          {% if overall_accuracy.win_rate is not none %}{{ overall_accuracy.win_rate }}%{% else %}N/A{% endif %}
+        </div>
+        <div class="small text-muted">Win Rate</div>
+        <div class="text-muted" style="font-size:.7rem">(BUY/SELL only)</div>
+      </div>
+      <div class="col-sm-3 col-6">
+        <div class="fs-3 fw-bold
+          {% if (overall_accuracy.avg_return_pct or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">
+          {% if overall_accuracy.avg_return_pct is not none %}{{ "%+.2f" % overall_accuracy.avg_return_pct }}%{% else %}N/A{% endif %}
+        </div>
+        <div class="small text-muted">Avg Return</div>
+        <div class="text-muted" style="font-size:.7rem">all predictions</div>
+      </div>
+      <div class="col-sm-3 col-6">
+        <div class="fs-3 fw-bold">{{ overall_accuracy.get('directional', 0) }}</div>
+        <div class="small text-muted">Directional Calls</div>
+        <div class="text-muted" style="font-size:.7rem">{{ overall_accuracy.correct }} correct</div>
+      </div>
+      <div class="col-sm-3 col-6">
+        <div class="fs-3 fw-bold">{{ overall_accuracy.total }}</div>
+        <div class="small text-muted">Total Evaluated</div>
+        <div class="text-muted" style="font-size:.7rem">across all symbols</div>
+      </div>
+    </div>
+    <div class="row g-3">
+      {% if overall_accuracy.get('by_horizon') %}
+      <div class="col-md-6">
+        <div class="small fw-semibold text-muted mb-2">Win Rate by Horizon</div>
+        <div class="d-flex gap-2 flex-wrap">
+          {% for h, s in overall_accuracy.by_horizon.items() | sort %}
+          <div class="text-center border rounded p-2" style="min-width:70px">
+            <div class="fw-bold {% if s.win_rate >= 60 %}text-success{% elif s.win_rate >= 45 %}text-warning{% else %}text-danger{% endif %}">{{ s.win_rate }}%</div>
+            <div class="text-muted" style="font-size:.75rem">{{ h }}d</div>
+            <div class="text-muted" style="font-size:.7rem">n={{ s.total }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% set bc = overall_accuracy.get('by_confidence', {}) %}
+      {% if bc.get('high') or bc.get('medium') or bc.get('low') %}
+      <div class="col-md-6">
+        <div class="small fw-semibold text-muted mb-2">Win Rate by Confidence</div>
+        <div class="d-flex gap-2 flex-wrap">
+          {% if bc.get('high') %}
+          <div class="text-center border border-success rounded p-2" style="min-width:80px">
+            <div class="fw-bold {% if bc.high.win_rate >= 60 %}text-success{% else %}text-warning{% endif %}">{{ bc.high.win_rate }}%</div>
+            <div class="text-muted" style="font-size:.75rem">High (8–10)</div>
+            <div class="text-muted" style="font-size:.7rem">n={{ bc.high.total }}</div>
+          </div>
+          {% endif %}
+          {% if bc.get('medium') %}
+          <div class="text-center border border-warning rounded p-2" style="min-width:80px">
+            <div class="fw-bold {% if bc.medium.win_rate >= 60 %}text-success{% else %}text-warning{% endif %}">{{ bc.medium.win_rate }}%</div>
+            <div class="text-muted" style="font-size:.75rem">Med (5–7)</div>
+            <div class="text-muted" style="font-size:.7rem">n={{ bc.medium.total }}</div>
+          </div>
+          {% endif %}
+          {% if bc.get('low') %}
+          <div class="text-center border border-secondary rounded p-2" style="min-width:80px">
+            <div class="fw-bold {% if bc.low.win_rate >= 60 %}text-success{% else %}text-danger{% endif %}">{{ bc.low.win_rate }}%</div>
+            <div class="text-muted" style="font-size:.75rem">Low (1–4)</div>
+            <div class="text-muted" style="font-size:.7rem">n={{ bc.low.total }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

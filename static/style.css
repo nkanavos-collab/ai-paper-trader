@@ -1,0 +1,369 @@
+/*
+ * AI Paper Trader — Design System
+ * Tokens from: Linear (surfaces, accent, typography) + Airbnb (shape, spacing, Inter)
+ * + Binance (financial green/red semantics) + Stripe (tabular-nums discipline)
+ *
+ * Linear rule  → single lavender accent, 4-step surface ladder, no gradients, NO pill buttons
+ * Airbnb rule  → 14px card radius, 8px button, 24px padding, generous whitespace
+ * Binance rule → green = gain, red = loss, gold = portfolio value
+ * Stripe rule  → tabular-nums on every number
+ */
+
+/* ══ 1. TOKENS ══════════════════════════════════════════════════════════════ */
+:root {
+  /* Linear 4-step surface ladder */
+  --bg:        #010102;
+  --s1:        #0f1011;
+  --s2:        #141516;
+  --s3:        #18191a;
+  --s4:        #1f2022;
+
+  /* Linear hairlines */
+  --b1:  #23252a;
+  --b2:  #34343a;
+  --b3:  rgba(255,255,255,0.06);
+
+  /* Linear text scale */
+  --t1:  #f7f8f8;
+  --t2:  #d0d6e0;
+  --t3:  #8a8f98;
+  --t4:  #62666d;
+
+  /* Linear accent — lavender-blue, reserved for brand/CTA/focus */
+  --accent:    #5e6ad2;
+  --accent-h:  #828fff;   /* hover */
+  --accent-f:  #5e69d1;   /* focus */
+  --accent-dim:rgba(94,106,210,0.14);
+
+  /* Financial semantics (Binance) */
+  --green:     #27a644;
+  --green-dim: rgba(39,166,68,0.12);
+  --red:       #ef4444;
+  --red-dim:   rgba(239,68,68,0.12);
+  --gold:      #f59e0b;
+  --gold-dim:  rgba(245,158,11,0.11);
+  --blue:      #3b82f6;
+  --blue-dim:  rgba(59,130,246,0.12);
+
+  /* Airbnb shape scale */
+  --r-xs:   4px;
+  --r-sm:   6px;
+  --r:      8px;
+  --r-md:   12px;
+  --r-lg:   14px;   /* Airbnb card radius */
+  --r-xl:   20px;
+  --r-pill: 9999px;
+
+  /* Spacing (Airbnb 4px base) */
+  --sp-xs:   4px;
+  --sp-sm:   8px;
+  --sp-md:  12px;
+  --sp-base:16px;
+  --sp-lg:  24px;
+  --sp-xl:  32px;
+
+  --t: 0.13s cubic-bezier(.4,0,.2,1);
+}
+
+/* ══ 2. BOOTSTRAP DARK OVERRIDE ══════════════════════════════════════════ */
+/* Must target [data-bs-theme="dark"] — that is what Bootstrap 5.3 actually reads. */
+[data-bs-theme="dark"] {
+  --bs-body-bg:                  #010102;
+  --bs-body-bg-rgb:              1,1,2;
+  --bs-body-color:               #f7f8f8;
+  --bs-body-color-rgb:           247,248,248;
+  --bs-secondary-bg:             #0f1011;
+  --bs-tertiary-bg:              #141516;
+  --bs-border-color:             #23252a;
+  --bs-border-color-translucent: rgba(255,255,255,0.06);
+  --bs-card-bg:                  #0f1011;
+  --bs-card-border-color:        #23252a;
+  --bs-table-bg:                 transparent;
+  --bs-link-color:               #828fff;
+  --bs-link-hover-color:         #a5b4fc;
+  --bs-input-bg:                 #141516;
+  color-scheme: dark;
+}
+
+/* ══ 3. BASE ═════════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--t1);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ══ 4. SAFETY BANNER ════════════════════════════════════════════════════ */
+.safety-banner {
+  background: #0a0800;
+  border-bottom: 1px solid rgba(245,158,11,.18);
+  color: var(--gold);
+  text-align: center;
+  padding: 6px 1rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  position: sticky;
+  top: 0;
+  z-index: 9999;
+}
+
+/* ══ 5. NAVBAR ════════════════════════════════════════════════════════════ */
+.navbar {
+  background: var(--s1) !important;
+  border-bottom: 1px solid var(--b1) !important;
+}
+.navbar-brand {
+  font-weight: 700;
+  font-size: 0.92rem;
+  letter-spacing: -0.3px;
+  color: var(--t1) !important;
+}
+.navbar .nav-link {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--t3) !important;
+  padding: 0.33rem 0.6rem;
+  border-radius: var(--r-sm);
+  transition: background var(--t), color var(--t);
+}
+.navbar .nav-link:hover  { background: var(--s2); color: var(--t2) !important; }
+.navbar .nav-link.active {
+  background: var(--accent-dim);
+  color: var(--accent-h) !important;
+  font-weight: 600;
+  border-bottom: 2px solid var(--accent);
+}
+
+/* ══ 6. CARDS  (Airbnb 14px radius, Linear surface colors) ══════════════ */
+.card {
+  background: var(--s1) !important;
+  border: 1px solid var(--b1) !important;
+  border-radius: var(--r-lg) !important;
+  box-shadow: none;
+  transition: border-color var(--t);
+}
+.card:hover { border-color: var(--b2) !important; }
+
+.card-header {
+  background: var(--s2) !important;
+  border-bottom: 1px solid var(--b1) !important;
+  border-radius: var(--r-lg) var(--r-lg) 0 0 !important;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.65rem var(--sp-lg);
+  color: var(--t2);
+  letter-spacing: 0.05px;
+}
+.card-body { padding: var(--sp-lg); }
+
+/* ══ 7. KPI CARDS ════════════════════════════════════════════════════════ */
+.kpi-card {
+  background: var(--s1) !important;
+  border: 1px solid var(--b1) !important;
+  border-radius: var(--r-lg) !important;
+  padding: var(--sp-lg) var(--sp-base);
+  transition: border-color var(--t), transform var(--t);
+}
+.kpi-card:hover { border-color: var(--b2) !important; transform: translateY(-1px); }
+
+.kpi-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  color: var(--t4);
+  margin-bottom: 6px;
+}
+.kpi-value {
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--t1);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.6px;   /* Linear negative tracking on display numbers */
+}
+.kpi-value.v-gold { color: var(--gold); }
+.kpi-value.v-blue { color: var(--blue); }
+.kpi-sub {
+  font-size: 0.7rem;
+  margin-top: 4px;
+  color: var(--t4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ══ 8. P&L ══════════════════════════════════════════════════════════════ */
+.pnl-pos { color: var(--green) !important; }
+.pnl-neg { color: var(--red)   !important; }
+
+/* ══ 9. CHART CONTAINERS ═════════════════════════════════════════════════ */
+.chart-wrap {
+  position: relative;
+  background: var(--s2);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  padding: var(--sp-base) var(--sp-base) 0.75rem;
+}
+.chart-wrap-sm { height: 140px; }
+.chart-wrap-md { height: 220px; }
+.chart-wrap-lg { height: 280px; }
+
+/* ══ 10. TABLES ══════════════════════════════════════════════════════════ */
+.table {
+  font-size: 0.82rem;
+  color: var(--t1);
+  --bs-table-bg: transparent;
+}
+.table th {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.55px;
+  color: var(--t4);
+  font-weight: 700;
+  border-color: var(--b1);
+  padding: 0.6rem var(--sp-lg);
+}
+.table td {
+  border-color: var(--b1);
+  vertical-align: middle;
+  padding: 0.58rem var(--sp-lg);
+  font-variant-numeric: tabular-nums;
+}
+.table-dark thead th { background: var(--s2) !important; color: var(--t4) !important; }
+.table-hover tbody tr:hover { background: var(--s2) !important; }
+
+/* ══ 11. BADGES ══════════════════════════════════════════════════════════ */
+.badge {
+  font-weight: 600;
+  font-size: 0.69rem;
+  letter-spacing: 0.2px;
+  border-radius: var(--r-sm);
+  padding: 3px 7px;
+}
+.badge.bg-success   { background: var(--green-dim)  !important; color: var(--green)  !important; outline: 1px solid rgba(39,166,68,.3); }
+.badge.bg-danger    { background: var(--red-dim)    !important; color: var(--red)    !important; outline: 1px solid rgba(239,68,68,.3); }
+.badge.bg-warning   { background: var(--gold-dim)   !important; color: var(--gold)   !important; outline: 1px solid rgba(245,158,11,.3); }
+.badge.bg-primary   { background: var(--accent-dim) !important; color: var(--accent-h) !important; outline: 1px solid rgba(94,106,210,.3); }
+.badge.bg-info      { background: var(--blue-dim)   !important; color: var(--blue)   !important; outline: 1px solid rgba(59,130,246,.3); }
+.badge.bg-secondary { background: rgba(255,255,255,.05) !important; color: var(--t3) !important; outline: 1px solid var(--b1); }
+
+/* ══ 12. BUTTONS  (Linear: 8px radius, NOT pills) ═══════════════════════ */
+/* Linear explicitly: "Don't pill-round CTAs (use 8px instead)" */
+.btn {
+  border-radius: var(--r) !important;   /* 8px — Linear spec */
+  font-weight: 500;
+  font-size: 0.82rem;
+  padding: 0.42rem 0.9rem;
+  border: none !important;
+  transition: all var(--t);
+}
+.btn-sm { padding: 0.28rem 0.65rem; font-size: 0.76rem; }
+.btn-lg { padding: 0.58rem 1.3rem; font-size: 0.9rem; }
+
+.btn-primary { background: var(--accent)   !important; color: #fff !important; }
+.btn-primary:hover  { background: var(--accent-h) !important; box-shadow: 0 4px 14px rgba(94,106,210,.35); }
+
+.btn-success { background: var(--green) !important; color: #fff !important; }
+.btn-success:hover  { background: #34c659 !important; }
+
+.btn-danger  { background: var(--red)   !important; color: #fff !important; }
+.btn-danger:hover   { background: #f87171 !important; }
+
+.btn-warning { background: var(--gold)  !important; color: #000 !important; font-weight: 700; }
+.btn-warning:hover  { background: #fbbf24 !important; }
+
+/* Outline variants */
+.btn-outline-primary   { background: transparent !important; color: var(--accent-h) !important; box-shadow: inset 0 0 0 1px var(--accent) !important; }
+.btn-outline-primary:hover { background: var(--accent-dim) !important; }
+.btn-outline-secondary { background: transparent !important; color: var(--t3) !important; box-shadow: inset 0 0 0 1px var(--b2) !important; }
+.btn-outline-secondary:hover { background: var(--s2) !important; color: var(--t2) !important; }
+.btn-outline-danger    { background: transparent !important; color: var(--red)  !important; box-shadow: inset 0 0 0 1px rgba(239,68,68,.5) !important; }
+.btn-outline-danger:hover { background: var(--red-dim) !important; }
+.btn-outline-warning   { background: transparent !important; color: var(--gold) !important; box-shadow: inset 0 0 0 1px rgba(245,158,11,.5) !important; }
+.btn-outline-warning:hover { background: var(--gold-dim) !important; }
+
+/* ══ 13. ALERTS ══════════════════════════════════════════════════════════ */
+.alert { border-radius: var(--r-lg); font-size: 0.83rem; }
+.alert-success { background: var(--green-dim) !important; border-color: rgba(39,166,68,.3)   !important; color: #34c659 !important; }
+.alert-danger  { background: var(--red-dim)   !important; border-color: rgba(239,68,68,.3)   !important; color: #f87171 !important; }
+.alert-warning { background: var(--gold-dim)  !important; border-color: rgba(245,158,11,.3)  !important; color: #fbbf24 !important; }
+.alert-info    { background: var(--blue-dim)  !important; border-color: rgba(59,130,246,.3)  !important; color: #60a5fa !important; }
+
+/* ══ 14. FORMS ═══════════════════════════════════════════════════════════ */
+.form-control, .form-select {
+  background: var(--s2) !important;
+  border: 1px solid var(--b2) !important;
+  color: var(--t1) !important;
+  border-radius: var(--r) !important;
+  font-size: 0.86rem;
+}
+.form-control:focus, .form-select:focus {
+  border-color: var(--accent-f) !important;
+  box-shadow: 0 0 0 3px rgba(94,106,210,.2) !important;
+}
+.form-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--t4); margin-bottom: 5px; }
+
+/* ══ 15. STATUS DOT ══════════════════════════════════════════════════════ */
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  display: inline-block; margin-right: 5px; flex-shrink: 0;
+}
+.status-dot.active  { background: var(--green); box-shadow: 0 0 0 3px var(--green-dim); animation: pulse 2s ease infinite; }
+.status-dot.paused  { background: var(--gold); }
+.status-dot.stopped { background: var(--t4); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ══ 16. METRIC ROW ══════════════════════════════════════════════════════ */
+.metric-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid var(--b1); font-size: 0.82rem;
+}
+.metric-row:last-child { border-bottom: none; }
+.metric-label { color: var(--t4); }
+.metric-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ══ 17. WATCHLIST CHIPS  (Airbnb pill for tags) ═════════════════════════ */
+.watchlist-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: var(--r-pill);   /* Airbnb uses pill for chips */
+  font-size: 0.72rem; font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--b1);
+  color: var(--t3); background: transparent;
+  transition: all var(--t);
+}
+.watchlist-chip:hover { border-color: var(--accent); color: var(--accent-h); background: var(--accent-dim); }
+.watchlist-chip.held  { background: var(--green-dim); border-color: rgba(39,166,68,.4); color: var(--green); }
+
+/* ══ 18. DECISION LOG ACCENTS ════════════════════════════════════════════ */
+.decision-row-buy  td:first-child { border-left: 3px solid var(--green); }
+.decision-row-sell td:first-child { border-left: 3px solid var(--red);   }
+.decision-row-hold td:first-child { border-left: 3px solid var(--b2); }
+.decision-row-skip td:first-child { border-left: 3px solid var(--t4); }
+
+/* ══ 19. MISC ═══════════════════════════════════════════════════════════ */
+.legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; flex-shrink: 0; }
+.label-sm   { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.9px; color: var(--t4); margin-bottom: 4px; }
+.border-2   { border-width: 2px !important; }
+.table-responsive { overflow-x: auto; border-radius: 0 0 var(--r-lg) var(--r-lg); }
+.progress   { background: rgba(255,255,255,.05); border-radius: var(--r-pill); }
+
+/* ══ 20. FOOTER & SCROLLBAR ══════════════════════════════════════════════ */
+footer { font-size: 0.73rem; color: var(--t4) !important; border-top-color: var(--b1) !important; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--s4); border-radius: var(--r-pill); }
+::-webkit-scrollbar-thumb:hover { background: var(--b2); }
+
+/* ══ 21. RESPONSIVE ══════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .kpi-value { font-size: 1.2rem; letter-spacing: -0.3px; }
+  .chart-wrap-lg { height: 190px; }
+  .chart-wrap-md { height: 150px; }
+}

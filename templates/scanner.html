@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}Opportunity Scanner — AI Paper Trader{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-radar me-2 text-warning"></i>Opportunity Scanner</h4>
+    <small class="text-muted">Scans {{ latest.ticker_count if latest else '—' }} tickers · Surfaces growth stocks with outsized return potential</small>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    {% if latest %}
+    <small class="text-muted">Last scan: {{ (latest.run_at or '')[:16].replace('T',' ') }} UTC
+      ({{ latest.duration_ms // 1000 }}s)</small>
+    {% endif %}
+    <button id="scanBtn" class="btn btn-warning fw-semibold px-4"
+            onclick="startScan()" {% if scan_running %}disabled{% endif %}>
+      {% if scan_running %}
+      <span class="spinner-border spinner-border-sm me-2"></span>Scanning…
+      {% else %}
+      <i class="bi bi-play-fill me-2"></i>Run Scanner
+      {% endif %}
+    </button>
+  </div>
+</div>
+
+{% if scan_error %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ scan_error }}</div>
+{% endif %}
+
+{% if scan_running %}
+<div class="alert alert-info d-flex align-items-center">
+  <span class="spinner-border spinner-border-sm me-3"></span>
+  <div>
+    <strong>Scan in progress…</strong>
+    <span class="text-muted ms-2">Stage 1: fetching market data for all tickers. Stage 2: deep analysis on top candidates. Takes ~60–90 seconds.</span>
+  </div>
+</div>
+{% endif %}
+
+{% if latest and latest.results %}
+{% set results = latest.results %}
+
+<!-- ── Top 3 Highlights ── -->
+<div class="row g-3 mb-4">
+  {% for r in results[:3] %}
+  <div class="col-md-4">
+    <div class="card h-100 border-2
+      {% if r.score >= 75 %}border-success
+      {% elif r.score >= 60 %}border-warning
+      {% else %}border-secondary{% endif %}">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-secondary">#{{ r.rank }}</span>
+              <h5 class="mb-0 fw-bold">{{ r.symbol }}</h5>
+            </div>
+            <div class="text-muted small">{{ (r.company_name or '')[:28] }}</div>
+            <div class="text-muted" style="font-size:.72rem">{{ r.sector or '' }}</div>
+          </div>
+          <div class="text-end">
+            <div class="fs-3 fw-bold
+              {% if r.score >= 75 %}text-success
+              {% elif r.score >= 60 %}text-warning
+              {% else %}text-secondary{% endif %}">
+              {{ r.score }}
+            </div>
+            <div class="text-muted" style="font-size:.7rem">/ 100</div>
+          </div>
+        </div>
+
+        <!-- Score bar -->
+        <div class="progress mb-3" style="height:6px;">
+          <div class="progress-bar
+            {% if r.score >= 75 %}bg-success{% elif r.score >= 60 %}bg-warning{% else %}bg-secondary{% endif %}"
+            style="width:{{ r.score }}%"></div>
+        </div>
+
+        <!-- Key signals -->
+        <div class="mb-3">
+          {% for sig in r.signals[:4] %}
+          <div class="small text-muted mb-1">
+            <i class="bi bi-check-circle-fill text-success me-1" style="font-size:.7rem"></i>{{ sig }}
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Convergence + badges -->
+        <div class="mb-2 d-flex flex-wrap gap-1">
+          {% if r.is_high_convergence %}
+          <span class="badge bg-warning text-dark">
+            <i class="bi bi-lightning-fill me-1"></i>{{ r.convergence_count }} signals converging
+          </span>
+          {% endif %}
+          {% if r.is_recent_listing %}
+          <span class="badge bg-info text-dark">
+            <i class="bi bi-rocket me-1"></i>Recent IPO ({{ (r.listing_age_days or 0) // 30 }}mo)
+          </span>
+          {% endif %}
+          {% if r.stkt_bull_ratio is not none and r.stkt_bull_ratio >= 0.65 %}
+          <span class="badge bg-success bg-opacity-75">
+            StockTwits {{ "%.0f" % (r.stkt_bull_ratio * 100) }}% bull
+          </span>
+          {% endif %}
+          {% if (r.revenue_trend or '') == 'accelerating' %}
+          <span class="badge bg-success bg-opacity-75">Rev accel ↑</span>
+          {% endif %}
+        </div>
+
+        <!-- Quick stats -->
+        <div class="row g-1 text-center mb-3">
+          <div class="col-4">
+            <div class="small fw-bold {% if (r.change_1m_pct or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ ("%+.1f" % r.change_1m_pct + "%") if r.change_1m_pct is not none else 'N/A' }}
+            </div>
+            <div class="text-muted" style="font-size:.65rem">1M</div>
+          </div>
+          <div class="col-4">
+            <div class="small fw-bold {% if (r.revenue_growth or 0) > 0.20 %}text-success{% endif %}">
+              {{ ("%.0f" % (r.revenue_growth * 100) + "%") if r.revenue_growth is not none else 'N/A' }}
+            </div>
+            <div class="text-muted" style="font-size:.65rem">Rev Growth</div>
+          </div>
+          <div class="col-4">
+            <div class="small fw-bold {% if (r.rsi or 50) < 35 %}text-success{% elif (r.rsi or 50) > 70 %}text-danger{% endif %}">
+              {{ "%.0f" % r.rsi if r.rsi is not none else 'N/A' }}
+            </div>
+            <div class="text-muted" style="font-size:.65rem">RSI</div>
+          </div>
+        </div>
+
+        <a href="/research?symbol={{ r.symbol }}&force=true"
+           class="btn btn-sm w-100
+           {% if r.score >= 75 %}btn-success{% elif r.score >= 60 %}btn-warning{% else %}btn-outline-secondary{% endif %}">
+          <i class="bi bi-search me-1"></i>Full Analysis
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── Full Results Table ── -->
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-table me-2"></i>All Ranked Results
+      <span class="badge bg-secondary ms-1">{{ results | length }} stocks</span>
+    </span>
+    <small class="text-muted">Scored from {{ latest.ticker_count }} tickers · {{ latest.duration_ms // 1000 }}s</small>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0 align-middle">
+        <thead class="table-dark">
+          <tr>
+            <th>#</th>
+            <th>Symbol</th>
+            <th>Company</th>
+            <th class="text-center">Score</th>
+            <th class="text-end">Price</th>
+            <th class="text-end">1M</th>
+            <th class="text-end">Rev Growth</th>
+            <th class="text-end">Mkt Cap</th>
+            <th class="text-end">RSI</th>
+            <th class="text-end">Vol Ratio</th>
+            <th>Conv</th>
+            <th>Flags</th>
+            <th>Top Signal</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in results %}
+          <tr class="{% if r.score >= 75 %}table-success bg-opacity-10{% elif r.score >= 60 %}table-warning bg-opacity-10{% endif %}">
+            <td class="text-muted small">{{ r.rank }}</td>
+            <td class="fw-bold">{{ r.symbol }}</td>
+            <td class="small text-muted">{{ (r.company_name or '')[:22] }}</td>
+            <td class="text-center">
+              <div class="d-flex align-items-center justify-content-center gap-1">
+                <div class="progress flex-grow-1" style="height:6px; width:50px;">
+                  <div class="progress-bar
+                    {% if r.score >= 75 %}bg-success{% elif r.score >= 60 %}bg-warning{% else %}bg-secondary{% endif %}"
+                    style="width:{{ r.score }}%"></div>
+                </div>
+                <span class="fw-bold small
+                  {% if r.score >= 75 %}text-success{% elif r.score >= 60 %}text-warning{% else %}text-muted{% endif %}">
+                  {{ r.score }}
+                </span>
+              </div>
+            </td>
+            <td class="text-end small">${{ "%.2f" % r.price_usd if r.price_usd else 'N/A' }}</td>
+            <td class="text-end small {% if (r.change_1m_pct or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ ("%+.1f" % r.change_1m_pct + "%") if r.change_1m_pct is not none else '—' }}
+            </td>
+            <td class="text-end small {% if (r.revenue_growth or 0) > 0.15 %}text-success{% elif (r.revenue_growth or 0) < 0 %}text-danger{% endif %}">
+              {{ ("%.0f" % (r.revenue_growth * 100) + "%") if r.revenue_growth is not none else '—' }}
+            </td>
+            <td class="text-end small text-muted">
+              {% if r.market_cap %}
+                {% if r.market_cap >= 1e12 %}${{ "%.1f" % (r.market_cap/1e12) }}T
+                {% elif r.market_cap >= 1e9 %}${{ "%.1f" % (r.market_cap/1e9) }}B
+                {% else %}${{ "%.0f" % (r.market_cap/1e6) }}M{% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-end small {% if (r.rsi or 50) < 35 %}text-success{% elif (r.rsi or 50) > 70 %}text-danger{% endif %}">
+              {{ "%.0f" % r.rsi if r.rsi is not none else '—' }}
+            </td>
+            <td class="text-end small {% if (r.vol_ratio or 1) > 2 %}text-warning fw-bold{% endif %}">
+              {{ "%.1f" % r.vol_ratio + "x" if r.vol_ratio is not none else '—' }}
+            </td>
+            <td class="text-center">
+              <span class="badge {% if r.convergence_count >= 5 %}bg-warning text-dark{% elif r.convergence_count >= 3 %}bg-secondary{% else %}bg-body-secondary text-body{% endif %}">
+                {{ r.convergence_count }}/8
+              </span>
+            </td>
+            <td class="small">
+              {% if r.is_recent_listing %}<span class="badge bg-info text-dark me-1" style="font-size:.6rem">IPO</span>{% endif %}
+              {% if (r.revenue_trend or '') == 'accelerating' %}<span class="badge bg-success me-1" style="font-size:.6rem">↑accel</span>{% endif %}
+              {% if r.stkt_bull_ratio is not none and r.stkt_bull_ratio >= 0.65 %}<span class="badge bg-success me-1" style="font-size:.6rem">STK↑</span>{% endif %}
+            </td>
+            <td class="small text-muted">{{ r.signals[0] if r.signals else '' }}</td>
+            <td>
+              <a href="/research?symbol={{ r.symbol }}&force=true"
+                 class="btn btn-sm btn-outline-primary py-0 px-2">
+                <i class="bi bi-search"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<!-- No scan yet -->
+<div class="card">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-radar display-1 text-warning mb-3"></i>
+    <h4>No scan data yet</h4>
+    <p class="text-muted mb-4">
+      The scanner checks {{ '~' + (latest.ticker_count | string) if latest else '~60' }} tickers across growth sectors,
+      scores each by momentum + earnings quality + analyst momentum + catalyst,
+      and surfaces the highest-opportunity stocks.
+    </p>
+    <button class="btn btn-warning btn-lg px-5" onclick="startScan()">
+      <i class="bi bi-play-fill me-2"></i>Run First Scan
+    </button>
+  </div>
+</div>
+{% endif %}
+
+{% if history %}
+<div class="card mt-3">
+  <div class="card-header"><i class="bi bi-clock-history me-2"></i>Scan History</div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead class="table-dark">
+        <tr><th>Date</th><th>Tickers</th><th>Scored</th><th>Duration</th></tr>
+      </thead>
+      <tbody>
+        {% for h in history %}
+        <tr>
+          <td class="small text-muted">{{ (h.run_at or '')[:16].replace('T',' ') }} UTC</td>
+          <td class="small">{{ h.ticker_count }}</td>
+          <td class="small">{{ h.scored_count }}</td>
+          <td class="small text-muted">{{ h.duration_ms // 1000 }}s</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function startScan() {
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting…';
+
+  fetch('/scanner/run', {method:'POST'})
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'already_running') {
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Scanning…';
+      }
+      pollStatus();
+    })
+    .catch(() => { btn.disabled = false; btn.innerHTML = '<i class="bi bi-play-fill me-2"></i>Run Scanner'; });
+}
+
+function pollStatus() {
+  fetch('/scanner/status')
+    .then(r => r.json())
+    .then(data => {
+      if (data.running) {
+        setTimeout(pollStatus, 3000);
+      } else {
+        // Scan done — reload page to show results
+        window.location.reload();
+      }
+    })
+    .catch(() => setTimeout(pollStatus, 5000));
+}
+
+// Auto-poll if scan is running on page load
+{% if scan_running %}
+setTimeout(pollStatus, 3000);
+{% endif %}
+</script>
+{% endblock %}

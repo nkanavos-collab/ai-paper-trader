@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% block title %}Risk — AI Paper Trader{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h4 class="fw-bold mb-1"><i class="bi bi-shield-exclamation text-warning me-2"></i>Risk Dashboard</h4>
+    <p class="text-muted small mb-0">Portfolio risk metrics, drawdown, VaR, and sector exposure</p>
+  </div>
+  <button class="btn btn-sm btn-outline-secondary" id="reviewBtn" onclick="requestReview()">
+    <i class="bi bi-robot me-1"></i>Generate AI Review
+  </button>
+</div>
+
+<!-- ── Equity curve + benchmark ──────────────────────────────────────────── -->
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-graph-up me-2 text-success"></i>Equity Curve vs Benchmark</span>
+    {% if chart.days %}
+    <small class="text-muted">{{ chart.days }} trading days</small>
+    {% endif %}
+  </div>
+
+  {% if chart.has_data %}
+  <!-- Return comparison strip -->
+  <div class="d-flex gap-4 px-3 pt-3 pb-1 flex-wrap">
+    <div>
+      <span class="text-muted small">Portfolio</span>
+      <span class="fw-bold ms-2 {% if chart.port_return_pct >= 0 %}text-success{% else %}text-danger{% endif %}">
+        {{ "%+.2f"|format(chart.port_return_pct) }}%
+      </span>
+    </div>
+    {% if chart.spy_return_pct is not none %}
+    <div>
+      <span class="text-muted small">SPY</span>
+      <span class="fw-bold ms-2 {% if chart.spy_return_pct >= 0 %}text-success{% else %}text-danger{% endif %}">
+        {{ "%+.2f"|format(chart.spy_return_pct) }}%
+      </span>
+    </div>
+    {% endif %}
+    {% if chart.qqq_return_pct is not none %}
+    <div>
+      <span class="text-muted small">QQQ</span>
+      <span class="fw-bold ms-2 {% if chart.qqq_return_pct >= 0 %}text-success{% else %}text-danger{% endif %}">
+        {{ "%+.2f"|format(chart.qqq_return_pct) }}%
+      </span>
+    </div>
+    {% endif %}
+    {% set alpha = chart.port_return_pct - (chart.spy_return_pct or 0) %}
+    <div>
+      <span class="text-muted small">Alpha vs SPY</span>
+      <span class="fw-bold ms-2 {% if alpha >= 0 %}text-success{% else %}text-danger{% endif %}">
+        {{ "%+.2f"|format(alpha) }}%
+      </span>
+    </div>
+  </div>
+  <div class="chart-wrap chart-wrap-lg px-2 pb-2">
+    <canvas id="chartEquity"></canvas>
+  </div>
+  {% else %}
+  <div class="card-body text-center text-muted py-5">
+    <i class="bi bi-graph-up d-block mb-2" style="font-size:2rem;opacity:.3"></i>
+    No snapshot history yet. Snapshots are recorded once per day when the scheduler runs.
+    <br><small>You can trigger one manually via <strong>Auto Trade → Run Now</strong>.</small>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Risk metrics row ──────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-arrow-down-circle me-2 text-danger"></i>Drawdown</div>
+      <div class="card-body">
+        {% if report.has_history %}
+        <div class="stat-card text-center mb-3">
+          <div class="stat-label">Max Drawdown</div>
+          <div class="stat-value text-danger">−{{ report.drawdown.max_dd_pct }}%</div>
+        </div>
+        <div class="d-flex justify-content-between text-muted small">
+          <span>Peak: <strong>€{{ "%.2f"|format(report.drawdown.peak_value) }}</strong></span>
+          <span>Trough: <strong>€{{ "%.2f"|format(report.drawdown.trough_value) }}</strong></span>
+        </div>
+        {% if report.rolling_30d is not none %}
+        <div class="mt-2 text-muted small">
+          30-day return:
+          <strong class="{% if report.rolling_30d >= 0 %}text-success{% else %}text-danger{% endif %}">
+            {{ "%+.2f"|format(report.rolling_30d) }}%
+          </strong>
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="text-muted small">Need ≥ 2 snapshots for drawdown analysis.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-exclamation-diamond me-2 text-warning"></i>Value at Risk (95%)</div>
+      <div class="card-body">
+        {% if report.var.var_pct is not none %}
+        <div class="stat-card text-center mb-3">
+          <div class="stat-label">Daily VaR (95%)</div>
+          <div class="stat-value text-warning">{{ report.var.var_pct }}%</div>
+        </div>
+        <div class="text-muted small">
+          <div>In EUR: <strong>−€{{ "%.2f"|format(report.var.var_eur) }}</strong></div>
+          <div>Daily std dev: <strong>{{ report.var.std_daily }}%</strong></div>
+          {% if report.var.es_pct %}
+          <div>Expected Shortfall: <strong>{{ report.var.es_pct }}%</strong></div>
+          {% endif %}
+        </div>
+        <p class="text-muted" style="font-size:.72rem;margin-top:.5rem;margin-bottom:0">
+          On 95% of days, portfolio loss ≤ {{ report.var.var_pct|abs }}%
+        </p>
+        {% else %}
+        <p class="text-muted small">Need ≥ 10 daily snapshots for VaR calculation.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-pie-chart me-2 text-info"></i>Sector Exposure</div>
+      <div class="card-body">
+        {% if report.sector.sectors %}
+        {% if report.sector.top_sector %}
+        <div class="mb-2 small text-muted">
+          Top sector: <strong>{{ report.sector.top_sector }}</strong>
+          ({{ report.sector.top_pct }}%)
+          {% if report.sector.herfindahl > 4000 %}
+          <span class="badge bg-warning text-dark ms-1">Concentrated</span>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% for sector, pct in report.sector.sectors.items() %}
+        <div class="mb-1">
+          <div class="d-flex justify-content-between small mb-1">
+            <span>{{ sector }}</span>
+            <span class="text-muted">{{ pct }}%</span>
+          </div>
+          <div class="progress" style="height:6px">
+            <div class="progress-bar bg-info" style="width:{{ pct }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted small">No open positions for sector analysis.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Correlation matrix ────────────────────────────────────────────────── -->
+{% if corr_rows | length >= 2 %}
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-grid-3x3 me-2"></i>Correlation Matrix (30-day returns)</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0 text-center align-middle" style="font-size:.82rem">
+        <thead>
+          <tr>
+            <th></th>
+            {% for row in corr_rows %}<th>{{ row.symbol }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in corr_rows %}
+          <tr>
+            <td class="fw-bold text-start ps-3">{{ row.symbol }}</td>
+            {% for j in range(corr_rows | length) %}
+            {% set val = row.values[j] if j < (row.values | length) else 1.0 %}
+            {% set same = (row.symbol == corr_rows[j].symbol) %}
+            <td style="background:{% if same %}transparent{% elif val >= 0.7 %}rgba(239,68,68,.25){% elif val >= 0.4 %}rgba(245,158,11,.15){% elif val <= -0.4 %}rgba(59,130,246,.15){% else %}transparent{% endif %}">
+              {% if same %}—{% else %}{{ "%.2f"|format(val) }}{% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if report.correlation.high_corr_pairs %}
+    <div class="px-3 pb-3 pt-2">
+      <small class="text-warning">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        High correlations (|r| ≥ 0.70):
+        {% for p in report.correlation.high_corr_pairs %}
+          <strong>{{ p.label }}</strong>{% if not loop.last %},{% endif %}
+        {% endfor %}
+        — these positions move together and don't provide diversification.
+      </small>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ── AI Portfolio Review ───────────────────────────────────────────────── -->
+{% from "macros.html" ignore missing %}
+<div class="card" id="reviewCard">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-robot me-2 text-info"></i>AI Portfolio Review</span>
+    <button class="btn btn-sm btn-outline-info" onclick="requestReview()" id="reviewBtn2">
+      <i class="bi bi-arrow-clockwise me-1"></i>Refresh Review
+    </button>
+  </div>
+  <div class="card-body" id="reviewContent">
+    {% set review = review if review is defined else none %}
+    {% if review %}
+    <div class="text-muted small mb-2">Generated {{ review.created_at[:16] | replace("T"," ") }} UTC</div>
+    <div class="review-text">{{ review.review_text | replace("\n", "<br>") | safe }}</div>
+    {% else %}
+    <p class="text-muted">No review generated yet. Click <strong>Generate AI Review</strong> above.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function requestReview() {
+  ['reviewBtn', 'reviewBtn2'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) { b.disabled = true; b.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating…'; }
+  });
+  fetch('/api/risk/run-review', {method: 'POST'})
+    .then(r => r.json())
+    .then(() => setTimeout(() => location.reload(), 16000))
+    .catch(() => location.reload());
+}
+
+{% if chart.has_data %}
+(function(){
+  const GREEN  = '#27a644';
+  const BLUE   = '#3b82f6';
+  const GOLD   = '#f59e0b';
+  const MUTED  = '#62666d';
+
+  const cd = {{ chart_json | safe }};
+  const ctx = document.getElementById('chartEquity');
+  if (!ctx || !cd.portfolio || cd.portfolio.length < 2) return;
+
+  const datasets = [{
+    label: 'Portfolio',
+    data: cd.portfolio,
+    borderColor: GREEN,
+    backgroundColor: 'rgba(39,166,68,0.07)',
+    borderWidth: 2.5,
+    fill: true,
+    tension: 0.3,
+    pointRadius: cd.portfolio.length > 30 ? 0 : 3,
+    pointHoverRadius: 5,
+  }];
+
+  if (cd.spy && cd.spy.some(v => v !== null)) {
+    datasets.push({
+      label: 'SPY (normalised)',
+      data: cd.spy,
+      borderColor: BLUE,
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderDash: [4, 3],
+      tension: 0.3,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      spanGaps: true,
+    });
+  }
+  if (cd.qqq && cd.qqq.some(v => v !== null)) {
+    datasets.push({
+      label: 'QQQ (normalised)',
+      data: cd.qqq,
+      borderColor: GOLD,
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderDash: [2, 3],
+      tension: 0.3,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      spanGaps: true,
+    });
+  }
+
+  new Chart(ctx, {
+    type: 'line',
+    data: { labels: cd.labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: {
+          display: true,
+          labels: { boxWidth: 10, padding: 14 }
+        },
+        tooltip: {
+          callbacks: {
+            label: c => ' ' + c.dataset.label + ': €' + c.parsed.y.toFixed(2)
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { maxTicksLimit: 10, maxRotation: 0, color: MUTED },
+          grid:  { color: 'rgba(255,255,255,0.04)' }
+        },
+        y: {
+          ticks: { callback: v => '€' + v.toFixed(0), color: MUTED },
+          grid:  { color: 'rgba(255,255,255,0.04)' }
+        }
+      }
+    }
+  });
+})();
+{% endif %}
+</script>
+{% endblock %}

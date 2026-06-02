@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}Data Diagnostics — AI Paper Trader{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-activity me-2 text-info"></i>Data Source Diagnostics</h4>
+  <small class="text-muted">Live check — bypasses no cache. Refresh to rerun.</small>
+</div>
+
+<!-- Symbol selector -->
+<div class="card mb-4">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label fw-semibold mb-1 small">Symbol</label>
+        <input type="text" name="symbol" class="form-control form-control-sm text-uppercase"
+               style="width:120px" value="{{ symbol }}" placeholder="AAPL" required>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-info">
+          <i class="bi bi-arrow-clockwise me-1"></i>Run
+        </button>
+      </div>
+      <div class="col">
+        <small class="text-muted">Showing results for <strong>{{ symbol }}</strong>.
+          Note: cached results (market 60 s, news/reddit 1 h, macro 30 min) may be returned.
+        </small>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Summary bar -->
+{% set ok_count = sources | selectattr('status', 'equalto', 'ok') | list | length %}
+{% set partial_count = sources | selectattr('status', 'equalto', 'partial') | list | length %}
+{% set failed_count = sources | selectattr('status', 'ne', 'ok') | selectattr('status', 'ne', 'partial') | list | length %}
+<div class="alert {% if ok_count == 4 %}alert-success{% elif failed_count > 1 %}alert-danger{% else %}alert-warning{% endif %} py-2 mb-4">
+  <strong>{{ ok_count }}/{{ sources | length }} sources OK</strong>
+  {% if partial_count %} &bull; {{ partial_count }} partial{% endif %}
+  {% if failed_count %} &bull; {{ failed_count }} failed{% endif %}
+</div>
+
+<div class="row g-4">
+{% for src in sources %}
+{% set sc = 'success' if src.status == 'ok' else ('warning' if src.status == 'partial' else 'danger') %}
+<div class="col-lg-6">
+  <div class="card h-100 border-{{ sc }} border-opacity-50">
+
+    <!-- Header -->
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold">
+        <i class="bi {{ src.icon }} me-2"></i>{{ src.name }}
+      </span>
+      <span class="badge bg-{{ sc }}">{{ src.status | upper }}</span>
+    </div>
+
+    <div class="card-body small">
+
+      <!-- Error banner -->
+      {% if src.error %}
+      <div class="alert alert-danger py-2 mb-2">
+        <i class="bi bi-x-circle me-1"></i><strong>Error:</strong> {{ src.error }}
+      </div>
+      {% endif %}
+
+      <!-- Sub-errors (per source) -->
+      {% for e in (src.errors or []) %}
+      <div class="alert alert-warning py-1 mb-1">
+        <i class="bi bi-exclamation-circle me-1"></i>{{ e }}
+      </div>
+      {% endfor %}
+
+      <!-- Warnings -->
+      {% for w in (src.warnings or []) %}
+      <div class="text-muted mb-1">
+        <i class="bi bi-info-circle me-1"></i>{{ w }}
+      </div>
+      {% endfor %}
+
+      <!-- Core metrics table -->
+      <table class="table table-sm table-borderless mb-2">
+        <tbody>
+          <tr>
+            <td class="text-muted" style="width:100px">Call</td>
+            <td class="font-monospace text-break" style="font-size:0.75rem">{{ src.call }}</td>
+          </tr>
+          <tr>
+            <td class="text-muted">Records</td>
+            <td class="fw-bold {% if src.records > 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ src.records }}
+            </td>
+          </tr>
+          {% if src.duration_ms is not none %}
+          <tr>
+            <td class="text-muted">Duration</td>
+            <td>{{ src.duration_ms }} ms</td>
+          </tr>
+          {% endif %}
+          {% if src.fetched_at %}
+          <tr>
+            <td class="text-muted">Fetched</td>
+            <td class="text-muted" style="font-size:0.75rem">{{ src.fetched_at }}</td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+
+      <!-- ── Details per source type ── -->
+      {% set d = src.details or {} %}
+
+      {# Market details #}
+      {% if d.get('price_usd') is not none %}
+      <div class="border-top border-secondary-subtle pt-2 mt-1">
+        <div class="d-flex flex-wrap gap-3 mb-1">
+          <span>Price: <strong>${{ "%.2f" % d.price_usd }}</strong></span>
+          {% if d.get('prev_close') is not none %}
+          <span>Prev: ${{ "%.2f" % d.prev_close }}</span>
+          {% endif %}
+          {% if d.get('rsi_14') is not none %}
+          <span>RSI: <strong>{{ "%.1f" % d.rsi_14 }}</strong></span>
+          {% endif %}
+          {% if d.get('history_bars') %}
+          <span>Bars: {{ d.history_bars }}</span>
+          {% endif %}
+        </div>
+        {% if d.get('sma_20') or d.get('sma_50') or d.get('sma_200') %}
+        <div class="d-flex flex-wrap gap-3 mb-1">
+          {% if d.get('sma_20') %}<span>SMA20: ${{ "%.2f" % d.sma_20 }}</span>{% endif %}
+          {% if d.get('sma_50') %}<span>SMA50: ${{ "%.2f" % d.sma_50 }}</span>{% endif %}
+          {% if d.get('sma_200') %}<span>SMA200: ${{ "%.2f" % d.sma_200 }}</span>{% endif %}
+        </div>
+        {% endif %}
+        <div class="mb-1">
+          ticker.info:
+          <span class="badge {% if d.get('info_available') %}bg-success{% else %}bg-warning text-dark{% endif %}">
+            {{ 'available' if d.get('info_available') else 'unavailable — using fast_info + history' }}
+          </span>
+        </div>
+        {% if d.get('fast_info_keys') %}
+        <div class="text-muted">fast_info keys: {{ d.fast_info_keys | join(', ') }}</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {# News source breakdown #}
+      {% if d.get('source_breakdown') %}
+      <div class="border-top border-secondary-subtle pt-2 mt-1">
+        {% for sb in d.source_breakdown %}
+        <div class="mb-1 ps-2 border-start border-3
+          {% if sb.status == 'ok' %}border-success{% elif sb.status == 'empty' %}border-warning{% else %}border-danger{% endif %}">
+          <span class="badge
+            {% if sb.status == 'ok' %}bg-success
+            {% elif sb.status == 'empty' %}bg-warning text-dark
+            {% else %}bg-danger{% endif %} me-1">{{ sb.status }}</span>
+          <span>{{ sb.source[:60] }}</span>
+          {% if sb.count %}<span class="text-muted ms-1">({{ sb.count }} articles)</span>{% endif %}
+          {% if sb.error %}<span class="text-danger ms-1">— {{ sb.error }}</span>{% endif %}
+          {% if sb.url %}
+          <div class="font-monospace text-muted" style="font-size:0.7rem; word-break:break-all">{{ sb.url }}</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if d.get('sources_hit') %}
+      <div class="mt-1">
+        Hit:
+        {% for s in d.sources_hit %}
+        <span class="badge bg-success me-1">{{ s }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if d.get('avg_sentiment') is not none %}
+      <div class="mt-1">Avg sentiment: <strong>{{ "%.3f" % d.avg_sentiment }}</strong></div>
+      {% endif %}
+
+      {# VADER badge — shared by news + sentiment #}
+      {% if d.get('vader_available') is not none %}
+      <div class="mt-1">
+        VADER:
+        <span class="badge {% if d.vader_available %}bg-success{% else %}bg-danger{% endif %}">
+          {{ 'installed' if d.vader_available else 'NOT installed — all sentiment scores = 0.000' }}
+        </span>
+      </div>
+      {% endif %}
+
+      {# Reddit subreddit breakdown #}
+      {% if d.get('subreddits_tried') %}
+      <div class="border-top border-secondary-subtle pt-2 mt-1">
+        <div class="mb-1">
+          Tried:
+          {% for s in d.subreddits_tried %}
+          {% set hit = s in (d.get('subreddits_hit') or []) %}
+          <span class="badge {% if hit %}bg-success{% else %}bg-secondary{% endif %} me-1">r/{{ s }}</span>
+          {% endfor %}
+        </div>
+        {% if d.get('news_fallback') %}
+        <div class="text-warning">
+          <i class="bi bi-arrow-right-circle me-1"></i>Reddit blocked — falling back to news-only sentiment
+        </div>
+        {% endif %}
+        {% if d.get('overall_score') is not none %}
+        <div class="mt-1">
+          Overall sentiment: <strong>{{ "%.3f" % d.overall_score }}</strong>
+          <span class="text-muted">({{ d.get('overall_label','') }})</span>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {# Macro sources status table #}
+      {% if d.get('sources_status') %}
+      <div class="border-top border-secondary-subtle pt-2 mt-1">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Ticker</th><th>Status</th></tr></thead>
+          <tbody>
+          {% for k, v in d.sources_status.items() %}
+          <tr>
+            <td class="text-muted">{{ k }}</td>
+            <td class="
+              {% if v.startswith('ok') %}text-success
+              {% elif 'no API' in v or 'unavailable' in v %}text-warning
+              {% else %}text-danger{% endif %}">{{ v }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% if d.get('market_regime') %}
+        <div class="mt-1">Regime: <strong>{{ d.market_regime }}</strong></div>
+        {% endif %}
+        {% if d.get('vix') is not none %}
+        <span class="me-3">VIX: <strong>{{ "%.1f" % d.vix }}</strong></span>
+        {% endif %}
+        {% if d.get('sp500') is not none %}
+        <span>S&amp;P 500: <strong>{{ "%.0f" % d.sp500 }}</strong></span>
+        {% endif %}
+      </div>
+      {% endif %}
+
+    </div>{# /card-body #}
+  </div>
+</div>
+{% endfor %}
+</div>{# /row #}
+{% endblock %}

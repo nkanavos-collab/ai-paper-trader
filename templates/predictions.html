@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+{% block title %}Prediction Tracking — AI Paper Trader{% endblock %}
+
+{% block content %}
+{% set s = stats %}
+{% set counts = s.get('counts', {}) %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-bullseye me-2 text-primary"></i>Prediction Performance</h4>
+  <div class="d-flex align-items-center gap-3">
+    {% if newly_evaluated %}
+    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>{{ newly_evaluated }} evaluation(s) just completed</span>
+    {% endif %}
+    <form method="post" action="/predictions/evaluate">
+      <button type="submit" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-arrow-repeat me-1"></i>Run Evaluations
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ── Summary Cards ─────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card card text-center py-3">
+      <div class="stat-label">Predictions</div>
+      <div class="stat-value">{{ counts.get('total', 0) }}</div>
+      <div class="stat-sub text-muted">total</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card card text-center py-3">
+      <div class="stat-label">Evaluated</div>
+      <div class="stat-value text-info">{{ s.get('unique_evaluated', 0) }}</div>
+      <div class="stat-sub text-muted">unique</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card card text-center py-3">
+      <div class="stat-label">Accuracy</div>
+      {% set acc = s.get('accuracy_pct') %}
+      <div class="stat-value {% if acc and acc >= 60 %}text-success{% elif acc and acc < 45 %}text-danger{% else %}text-warning{% endif %}">
+        {% if acc is not none %}{{ acc }}%{% else %}<span class="fs-6 text-muted">—</span>{% endif %}
+      </div>
+      <div class="stat-sub text-muted">direction correct</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card card text-center py-3">
+      <div class="stat-label">Win Rate</div>
+      {% set wr = s.get('win_rate_pct') %}
+      <div class="stat-value {% if wr and wr >= 55 %}text-success{% elif wr and wr < 45 %}text-danger{% else %}text-warning{% endif %}">
+        {% if wr is not none %}{{ wr }}%{% else %}<span class="fs-6 text-muted">—</span>{% endif %}
+      </div>
+      <div class="stat-sub text-muted">profitable calls</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card card text-center py-3">
+      <div class="stat-label">Avg Return</div>
+      {% set ar = s.get('avg_return_pct') %}
+      <div class="stat-value {% if ar and ar > 0 %}text-success{% elif ar and ar < 0 %}text-danger{% else %}text-muted{% endif %}">
+        {% if ar is not none %}{{ "%+.2f" % ar }}%{% else %}<span class="fs-6 text-muted">—</span>{% endif %}
+      </div>
+      <div class="stat-sub text-muted">direction-adjusted</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="stat-card card text-center py-3">
+      <div class="stat-label">Pending</div>
+      <div class="stat-value text-warning">{{ s.get('pending_due', 0) }}</div>
+      <div class="stat-sub text-muted">due for eval</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Performance by Horizon + By Recommendation ──────────────────────── -->
+<div class="row g-4 mb-4">
+
+  <!-- Horizon table -->
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-calendar3 me-2"></i>Performance by Time Horizon</div>
+      <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Horizon</th>
+              <th class="text-center">Evals</th>
+              <th class="text-center">Accuracy</th>
+              <th class="text-center">Win Rate</th>
+              <th class="text-center">Avg Return</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for days, label in [(1,'1 Day'),(3,'3 Days'),(7,'7 Days'),(30,'30 Days')] %}
+            {% set h = s.get('by_horizon', {}).get(days, {}) %}
+            <tr>
+              <td class="fw-semibold">{{ label }}</td>
+              <td class="text-center text-muted">{{ h.get('count', 0) }}</td>
+              <td class="text-center">
+                {% set ha = h.get('accuracy_pct') %}
+                {% if ha is not none %}
+                <span class="badge {% if ha >= 60 %}bg-success{% elif ha < 45 %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                  {{ ha }}%
+                </span>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td class="text-center">
+                {% set hw = h.get('win_rate_pct') %}
+                {% if hw is not none %}<span class="{% if hw >= 55 %}text-success{% elif hw < 45 %}text-danger{% else %}text-warning{% endif %}">{{ hw }}%</span>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td class="text-center">
+                {% set hr = h.get('avg_return_pct') %}
+                {% if hr is not none %}<span class="{% if hr > 0 %}text-success{% elif hr < 0 %}text-danger{% else %}text-muted{% endif %} fw-bold">{{ "%+.2f" % hr }}%</span>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- By Recommendation -->
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-tags me-2"></i>By Recommendation Type</div>
+      <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Type</th>
+              <th class="text-center">Count</th>
+              <th class="text-center">Accuracy</th>
+              <th class="text-center">Avg Return</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rec, badge_cls in [('BUY','bg-success'),('HOLD','bg-warning text-dark'),('SELL','bg-danger')] %}
+            {% set rb = s.get('by_recommendation', {}).get(rec, {}) %}
+            <tr>
+              <td><span class="badge {{ badge_cls }}">{{ rec }}</span></td>
+              <td class="text-center text-muted">{{ rb.get('count', 0) }}</td>
+              <td class="text-center">
+                {% set ra = rb.get('accuracy_pct') %}
+                {% if ra is not none %}
+                <span class="{% if ra >= 60 %}text-success{% elif ra < 45 %}text-danger{% else %}text-warning{% endif %}">{{ ra }}%</span>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td class="text-center">
+                {% set rr = rb.get('avg_return_pct') %}
+                {% if rr is not none %}<span class="{% if rr > 0 %}text-success{% elif rr < 0 %}text-danger{% else %}text-muted{% endif %}">{{ "%+.2f" % rr }}%</span>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Confidence Calibration ─────────────────────────────────────────── -->
+<div class="card mb-4">
+  <div class="card-header d-flex align-items-center gap-2">
+    <i class="bi bi-sliders me-1"></i>Confidence Calibration
+    <small class="text-muted">— a well-calibrated model has higher accuracy at higher confidence</small>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      {% for label, desc in [('1-3','Low'),('4-6','Medium'),('7-8','High'),('9-10','Top')] %}
+      {% set cb = s.get('by_confidence', {}).get(label, {}) %}
+      {% set ca = cb.get('accuracy_pct') %}
+      <div class="col-md-3">
+        <div class="d-flex justify-content-between mb-1">
+          <span class="fw-semibold">{{ label }} <small class="text-muted">({{ desc }})</small></span>
+          <span class="text-muted small">{{ cb.get('count', 0) }} evals</span>
+        </div>
+        {% if ca is not none %}
+        <div class="progress mb-1" style="height:12px;">
+          <div class="progress-bar
+            {% if ca >= 65 %}bg-success{% elif ca >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+            style="width:{{ ca }}%">
+          </div>
+        </div>
+        <div class="d-flex justify-content-between">
+          <small class="{% if ca >= 65 %}text-success{% elif ca >= 50 %}text-warning{% else %}text-danger{% endif %} fw-bold">
+            {{ ca }}% accurate
+          </small>
+          {% set cr = cb.get('avg_return_pct') %}
+          {% if cr is not none %}
+          <small class="{% if cr > 0 %}text-success{% elif cr < 0 %}text-danger{% else %}text-muted{% endif %}">
+            {{ "%+.2f" % cr }}% avg
+          </small>
+          {% endif %}
+        </div>
+        {% else %}
+        <div class="text-muted small">No evaluations yet</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- ── Best & Worst ───────────────────────────────────────────────────── -->
+{% if s.get('best') or s.get('worst') %}
+<div class="row g-4 mb-4">
+
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header text-success"><i class="bi bi-trophy-fill me-2"></i>Best Predictions</div>
+      <div class="card-body p-0">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-dark">
+            <tr><th>Symbol</th><th class="text-center">Rec</th><th class="text-center">Conf</th><th class="text-center">Horizon</th><th class="text-end">Return</th></tr>
+          </thead>
+          <tbody>
+            {% for p in s.get('best', []) %}
+            <tr>
+              <td><a href="/research?symbol={{ p.symbol }}" class="fw-bold text-decoration-none">{{ p.symbol }}</a></td>
+              <td class="text-center">
+                <span class="badge {% if p.recommendation=='BUY' %}bg-success{% elif p.recommendation=='SELL' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ p.recommendation }}</span>
+              </td>
+              <td class="text-center small">{{ p.get('confidence', '?') }}/10</td>
+              <td class="text-center small text-muted">{{ p.get('horizon_days', '') }}d</td>
+              <td class="text-end fw-bold text-success">{{ "%+.2f" % p.adj_return }}%</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-3">Not enough evaluations yet</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Worst Predictions</div>
+      <div class="card-body p-0">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-dark">
+            <tr><th>Symbol</th><th class="text-center">Rec</th><th class="text-center">Conf</th><th class="text-center">Horizon</th><th class="text-end">Return</th></tr>
+          </thead>
+          <tbody>
+            {% for p in s.get('worst', []) %}
+            <tr>
+              <td><a href="/research?symbol={{ p.symbol }}" class="fw-bold text-decoration-none">{{ p.symbol }}</a></td>
+              <td class="text-center">
+                <span class="badge {% if p.recommendation=='BUY' %}bg-success{% elif p.recommendation=='SELL' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ p.recommendation }}</span>
+              </td>
+              <td class="text-center small">{{ p.get('confidence', '?') }}/10</td>
+              <td class="text-center small text-muted">{{ p.get('horizon_days', '') }}d</td>
+              <td class="text-end fw-bold text-danger">{{ "%+.2f" % p.adj_return }}%</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-3">Not enough evaluations yet</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endif %}
+
+<!-- ── All Predictions ─────────────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-list-columns me-2"></i>All Predictions
+      <span class="badge bg-secondary ms-1">{{ predictions | length }}</span>
+    </span>
+    <small class="text-muted">✓ correct &nbsp; ✗ wrong &nbsp; ⏳ pending &nbsp; — HOLD</small>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>Date</th>
+            <th>Symbol</th>
+            <th>Company</th>
+            <th class="text-center">Rec</th>
+            <th class="text-center">Conf</th>
+            <th class="text-end">Price @ Rec</th>
+            <th>Engine</th>
+            <th class="text-center">1D</th>
+            <th class="text-center">3D</th>
+            <th class="text-center">7D</th>
+            <th class="text-center">30D</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pred in predictions %}
+          {% set evals = pred.get('evals', {}) %}
+          <tr>
+            <td class="text-muted small">{{ pred.created_at[:10] }}</td>
+            <td><a href="/research?symbol={{ pred.symbol }}" class="fw-bold text-decoration-none">{{ pred.symbol }}</a></td>
+            <td class="text-muted small">{{ (pred.get('company_name') or '')[:20] }}</td>
+            <td class="text-center">
+              <span class="badge
+                {% if pred.recommendation == 'BUY' %}bg-success
+                {% elif pred.recommendation == 'SELL' %}bg-danger
+                {% else %}bg-warning text-dark{% endif %}">
+                {{ pred.recommendation }}
+              </span>
+            </td>
+            <td class="text-center small">{{ pred.get('confidence', '?') }}/10</td>
+            <td class="text-end small">${{ "%.2f" % pred.price_usd }}</td>
+            <td class="small text-muted">
+              {% set eng = pred.get('reasoning_engine', '') %}
+              {% if 'Claude' in eng %}<span class="text-primary">Claude</span>
+              {% elif eng %}rule-based{% endif %}
+            </td>
+            {% for days in [1, 3, 7, 30] %}
+            {% set ev = evals.get(days, {}) %}
+            <td class="text-center small">
+              {% if ev.get('status') == 'evaluated' %}
+                {% set ret = ev.get('return_pct') %}
+                {% set dc = ev.get('direction_correct') %}
+                {% if pred.recommendation == 'HOLD' or dc is none %}
+                  <span class="text-muted" title="HOLD — {{ '%+.2f' % ret if ret is not none else 'N/A' }}%">—</span>
+                {% elif dc == 1 %}
+                  <span class="text-success" title="{{ '%+.2f' % ret }}%">✓
+                    {% if ret is not none %}<br><small>{{ "%+.1f" % ret }}%</small>{% endif %}
+                  </span>
+                {% else %}
+                  <span class="text-danger" title="{{ '%+.2f' % ret if ret is not none else '' }}%">✗
+                    {% if ret is not none %}<br><small>{{ "%+.1f" % ret }}%</small>{% endif %}
+                  </span>
+                {% endif %}
+              {% elif ev.get('status') == 'skipped' %}
+                <span class="text-muted" title="Skipped — no data">×</span>
+              {% elif ev.get('status') == 'pending' %}
+                {% set due = ev.get('due_at', '') %}
+                <span class="text-muted" title="Due: {{ due[:10] }}">⏳</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="11" class="text-center text-muted py-4">
+              <i class="bi bi-inbox display-6 d-block mb-2"></i>
+              No predictions yet. <a href="/research">Run your first analysis</a> to start tracking.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Thesis legend at the bottom -->
+{% if predictions %}
+<div class="mt-3">
+  <small class="text-muted">
+    <i class="bi bi-info-circle me-1"></i>
+    <strong>Accuracy</strong> = correct direction (BUY/SELL only, HOLD excluded).
+    <strong>Win Rate</strong> = % of directional predictions where the adjusted return &gt; 0.
+    <strong>Avg Return</strong> = direction-adjusted: BUY return kept as-is, SELL return negated (positive = trader profits).
+    Evaluations use the first available closing price on or after the horizon date.
+  </small>
+</div>
+{% endif %}
+
+{% endblock %}

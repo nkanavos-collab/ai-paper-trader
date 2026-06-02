@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Transactions — AI Paper Trader{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Transaction History</h4>
+  <span class="text-muted small">{{ transactions | length }} record(s)</span>
+</div>
+
+<!-- Filter Bar -->
+<div class="card mb-4">
+  <div class="card-body py-2">
+    <form method="get" action="/transactions" class="row g-2 align-items-center">
+      <div class="col-auto">
+        <label class="col-form-label">Filter by symbol:</label>
+      </div>
+      <div class="col-md-3">
+        <input type="text" name="symbol" class="form-control text-uppercase"
+               placeholder="e.g. AAPL" value="{{ filter_symbol }}">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Filter</button>
+        {% if filter_symbol %}
+        <a href="/transactions" class="btn btn-outline-secondary ms-1">Clear</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if transactions %}
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>Timestamp</th>
+            <th>Symbol</th>
+            <th class="text-center">Action</th>
+            <th class="text-end">Qty</th>
+            <th class="text-end">Price USD</th>
+            <th class="text-end">Price EUR</th>
+            <th class="text-end">EUR/USD</th>
+            <th class="text-end">Total EUR</th>
+            <th class="text-end">Balance EUR</th>
+            <th class="text-end">Realised P&amp;L</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tx in transactions %}
+          <tr>
+            <td class="text-muted small">{{ tx.timestamp[:19].replace("T"," ") }}</td>
+            <td><a href="/research?symbol={{ tx.symbol }}" class="fw-bold text-decoration-none">{{ tx.symbol }}</a></td>
+            <td class="text-center">
+              <span class="badge {% if tx.action == 'BUY' %}bg-success{% else %}bg-danger{% endif %}">
+                {{ tx.action }}
+              </span>
+            </td>
+            <td class="text-end">{{ "%.4f" % tx.quantity }}</td>
+            <td class="text-end text-muted">${{ "%.4f" % tx.price_usd }}</td>
+            <td class="text-end">{{ tx.price_eur | eur }}</td>
+            <td class="text-end text-muted small">{{ "%.4f" % tx.eur_usd_rate }}</td>
+            <td class="text-end fw-semibold">{{ tx.total_eur | eur }}</td>
+            <td class="text-end text-info">{{ tx.balance_after_eur | eur }}</td>
+            <td class="text-end">
+              {% if tx.action == 'SELL' %}
+                {% set rpnl = tx.get('realized_pnl_eur', 0) or 0 %}
+                <span class="{% if rpnl >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                  {{ rpnl | eur }}
+                </span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="small text-muted">{{ tx.get('notes') or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-inbox display-3 d-block mb-3"></i>
+  <h5>No transactions{% if filter_symbol %} for {{ filter_symbol }}{% endif %}</h5>
+  {% if filter_symbol %}
+  <a href="/transactions" class="btn btn-outline-secondary mt-2">Show all</a>
+  {% else %}
+  <a href="/trade" class="btn btn-primary mt-2">Make your first trade</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

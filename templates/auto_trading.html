@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+{% block title %}Autonomous Trading — AI Paper Trader{% endblock %}
+
+{% block content %}
+
+{# Safety banner #}
+<div class="alert alert-warning py-2 mb-4 d-flex align-items-center gap-2">
+  <i class="bi bi-shield-exclamation-fill fs-5"></i>
+  <strong>AUTONOMOUS PAPER TRADING ONLY &mdash; NO REAL MONEY &mdash; NO REAL BROKER &mdash; NO REAL ORDERS</strong>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h4 class="mb-0 fw-bold"><i class="bi bi-robot me-2 text-primary"></i>Autonomous Trading</h4>
+    <small class="text-muted">AI executes simulated paper trades automatically — zero real risk</small>
+  </div>
+  {% if status.active %}
+  <span class="badge" style="background:rgba(63,185,80,0.15);color:#3fb950;border:1px solid rgba(63,185,80,0.4);padding:8px 14px;font-size:0.8rem">
+    <span class="status-dot active"></span>Engine Active
+  </span>
+  {% endif %}
+</div>
+
+{# ── Row 1: Status + Risk Rules + Watchlist ── #}
+<div class="row g-3 mb-4">
+
+  {# Status + Controls #}
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-activity me-2"></i>Engine Status</span>
+        {% if status.running %}
+        <span class="badge bg-info text-dark">
+          <span class="spinner-grow spinner-grow-sm me-1"></span>Running…
+        </span>
+        {% elif status.active %}
+        <span class="badge bg-success"><span class="status-dot active"></span>Active</span>
+        {% elif status.paused %}
+        <span class="badge bg-warning">Paused</span>
+        {% else %}
+        <span class="badge bg-secondary">Disabled</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div class="metric-row"><span class="metric-label">Mode</span>
+          <span class="metric-value">
+            {% if not status.enabled %}
+            <span class="text-muted">Disabled</span>
+            {% elif status.paused %}
+            <span class="text-warning">Paused</span>
+            {% else %}
+            <span class="text-success">Enabled</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="metric-row"><span class="metric-label">Last Run</span>
+          <span class="metric-value small">
+            {% if status.last_run_at %}
+            {{ status.last_run_at[:19].replace("T", " ") }} UTC
+            {% else %}<span class="text-muted">Never</span>{% endif %}
+          </span>
+        </div>
+        <div class="metric-row"><span class="metric-label">Trades Today</span>
+          <span class="metric-value {% if status.trades_today > 0 %}text-primary{% endif %}">
+            {{ status.trades_today }}
+          </span>
+        </div>
+        <div class="metric-row"><span class="metric-label">Schedule</span>
+          <span class="metric-value text-muted">Every {{ status.risk_rules.run_interval_hrs }}h · weekdays</span>
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap mt-3">
+          {% if status.enabled %}
+            {% if status.paused %}
+            <form method="post" action="/auto-trading/resume">
+              <button class="btn btn-success btn-sm">
+                <i class="bi bi-play-fill me-1"></i>Resume
+              </button>
+            </form>
+            {% else %}
+            <form method="post" action="/auto-trading/pause">
+              <button class="btn btn-warning btn-sm">
+                <i class="bi bi-pause-fill me-1"></i>Pause
+              </button>
+            </form>
+            {% endif %}
+            <form method="post" action="/auto-trading/run">
+              <button class="btn btn-outline-primary btn-sm" {% if status.running %}disabled{% endif %}>
+                <i class="bi bi-lightning-fill me-1"></i>Run Now
+              </button>
+            </form>
+          {% else %}
+          <span class="text-muted small">Set AUTO_PAPER_TRADING=True in config.py</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Risk Rules #}
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-shield-check me-2 text-success"></i>Risk Rules</div>
+      <div class="card-body">
+        <div class="metric-row">
+          <span class="metric-label">Max position size</span>
+          <span class="metric-value text-primary">{{ (status.risk_rules.max_position_pct * 100) | int }}% of portfolio</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Max open positions</span>
+          <span class="metric-value">{{ status.risk_rules.max_positions }}</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Stop loss</span>
+          <span class="metric-value text-danger">−{{ (status.risk_rules.stop_loss_pct * 100) | int }}%</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Take profit</span>
+          <span class="metric-value text-success">+{{ (status.risk_rules.take_profit_pct * 100) | int }}%</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Min BUY confidence</span>
+          <span class="metric-value">≥ {{ status.risk_rules.min_confidence }}/10</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Sell if confidence ≤</span>
+          <span class="metric-value text-warning">{{ status.risk_rules.sell_confidence }}/10</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Leverage / Shorts</span>
+          <span class="metric-value text-success">None / Disabled</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Watchlist #}
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-list-stars me-2"></i>Watchlist
+        <span class="badge bg-secondary ms-1">{{ status.watchlist | length }}</span>
+      </div>
+      <div class="card-body">
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          {% for sym in status.watchlist %}
+          {% set held = positions | selectattr('symbol', 'equalto', sym) | list | length > 0 %}
+          <a href="/research?symbol={{ sym }}"
+             class="watchlist-chip {% if held %}held{% endif %}">
+            {{ sym }}{% if held %} <i class="bi bi-check2"></i>{% endif %}
+          </a>
+          {% endfor %}
+        </div>
+        <p class="text-muted mb-0" style="font-size:0.75rem">
+          <i class="bi bi-info-circle me-1"></i>
+          Green chips = currently held. Click any to open Research.
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Row 2: Charts ── #}
+<div class="row g-3 mb-4">
+
+  {# Decision breakdown bar chart #}
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-bar-chart me-2 text-primary"></i>Decision Breakdown
+        <small class="text-muted ms-2">(all time)</small>
+      </div>
+      <div class="chart-container chart-container-md">
+        <canvas id="chartDecisions"></canvas>
+      </div>
+    </div>
+  </div>
+
+  {# Confidence histogram #}
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-speedometer me-2 text-info"></i>BUY Confidence
+      </div>
+      <div class="chart-container chart-container-md d-flex align-items-center justify-content-center">
+        <canvas id="chartConfidence"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Open Positions with Override ── #}
+{% if positions %}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-briefcase me-2"></i>Open Positions</span>
+    <span class="text-warning small"><i class="bi bi-exclamation-triangle me-1"></i>Force-sell bypasses all risk rules</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Symbol</th>
+          <th class="text-end">Qty</th>
+          <th class="text-end">Avg Cost €</th>
+          <th>Entry Reason</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in positions %}
+        <tr>
+          <td class="fw-bold">
+            <a href="/research?symbol={{ p.symbol }}" class="text-decoration-none">{{ p.symbol }}</a>
+          </td>
+          <td class="text-end text-muted">{{ "%.4f" % p.quantity }}</td>
+          <td class="text-end">€{{ "%.4f" % p.avg_cost_eur }}</td>
+          <td class="text-muted small">{{ (p.get('entry_reason') or '')[:70] }}</td>
+          <td class="text-end">
+            <form method="post" action="/auto-trading/force-sell/{{ p.symbol }}"
+                  onsubmit="return confirm('Force-close all {{ p.symbol }} shares?\nThis bypasses stop-loss and take-profit rules.')">
+              <button class="btn btn-sm btn-outline-danger py-0 px-2">
+                <i class="bi bi-x-circle me-1"></i>Force Sell
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Full Decision Log ── #}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-journal-code me-2"></i>Decision Log</span>
+    <small class="text-muted">{{ decisions | length }} entries — most recent first</small>
+  </div>
+  {% if decisions %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 align-middle" style="font-size:0.8rem">
+      <thead class="table-dark">
+        <tr>
+          <th>Timestamp</th>
+          <th>Run</th>
+          <th>Symbol</th>
+          <th class="text-center">Action</th>
+          <th class="text-center">Conf</th>
+          <th class="text-end">Price €</th>
+          <th class="text-end">Size €</th>
+          <th>Reason</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in decisions %}
+        <tr class="decision-row-{{ d.action | lower }}">
+          <td class="text-muted">{{ d.timestamp[:19].replace("T"," ") }}</td>
+          <td class="text-muted font-monospace" style="font-size:0.68rem">{{ d.run_id[-12:] }}</td>
+          <td class="fw-bold">
+            <a href="/research?symbol={{ d.symbol }}" class="text-decoration-none">{{ d.symbol }}</a>
+          </td>
+          <td class="text-center">
+            <span class="badge
+              {% if d.action == 'BUY' %}bg-success
+              {% elif d.action == 'SELL' %}bg-danger
+              {% elif d.action == 'HOLD' %}bg-secondary
+              {% else %}bg-secondary{% endif %}">{{ d.action }}</span>
+          </td>
+          <td class="text-center">
+            {% if d.confidence %}
+            <span class="badge {% if d.confidence >= 7 %}bg-success{% elif d.confidence >= 5 %}bg-warning{% else %}bg-secondary{% endif %}">
+              {{ d.confidence }}/10
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-end">{% if d.price_eur %}€{{ "%.3f" % d.price_eur }}{% else %}—{% endif %}</td>
+          <td class="text-end">{% if d.position_size_eur %}€{{ "%.2f" % d.position_size_eur }}{% else %}—{% endif %}</td>
+          <td class="text-muted" style="max-width:250px">
+            <span title="{{ d.reason }}">{{ d.reason[:80] }}{% if d.reason | length > 80 %}…{% endif %}</span>
+          </td>
+          <td>
+            {% if 'executed' in d.result %}
+            <span class="text-success"><i class="bi bi-check-circle me-1"></i>{{ d.result }}</span>
+            {% elif 'failed' in d.result or 'error' in d.result %}
+            <span class="text-danger"><i class="bi bi-x-circle me-1"></i>{{ d.result[:35] }}</span>
+            {% elif d.result == 'no action' %}
+            <span class="text-muted">—</span>
+            {% else %}
+            <span class="text-muted">{{ d.result[:30] }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-center text-muted py-5">
+    <i class="bi bi-journal-x display-5 d-block mb-3 opacity-25"></i>
+    <div class="fw-semibold mb-1">No autonomous decisions yet</div>
+    {% if status.active %}
+    <small>The scheduler runs automatically, or click <strong>Run Now</strong> above.</small>
+    {% else %}
+    <small>Enable or resume autonomous trading to start logging decisions.</small>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const COLORS = {
+    BUY:  { bg: 'rgba(63,185,80,0.25)',  border: '#3fb950' },
+    SELL: { bg: 'rgba(248,81,73,0.25)',  border: '#f85149' },
+    HOLD: { bg: 'rgba(139,148,158,0.2)', border: '#8b949e' },
+    SKIP: { bg: 'rgba(88,166,255,0.2)',  border: '#58a6ff' },
+  };
+
+  /* ── Decision Breakdown Bar Chart ── */
+  const dec = {{ chart_decisions | safe }};
+  const decCtx = document.getElementById('chartDecisions');
+  if (decCtx && dec) {
+    const labels = ['BUY', 'SELL', 'HOLD', 'SKIP'];
+    new Chart(decCtx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'All decisions',
+          data: labels.map(l => dec[l] || 0),
+          backgroundColor: labels.map(l => COLORS[l].bg),
+          borderColor:     labels.map(l => COLORS[l].border),
+          borderWidth: 2,
+          borderRadius: 6,
+          borderSkipped: false,
+        }, {
+          label: 'Executed only',
+          data: [dec.executed_buys || 0, dec.executed_sells || 0, 0, 0],
+          backgroundColor: ['rgba(63,185,80,0.5)', 'rgba(248,81,73,0.5)', 'transparent', 'transparent'],
+          borderColor:     ['#3fb950', '#f85149', 'transparent', 'transparent'],
+          borderWidth: 2,
+          borderRadius: 6,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, position: 'top' },
+          tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.parsed.y } }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' } },
+          y: {
+            beginAtZero: true,
+            ticks: { stepSize: 1, precision: 0 },
+            grid: { color: 'rgba(255,255,255,0.04)' }
+          }
+        }
+      }
+    });
+  }
+
+  /* ── Confidence Histogram Donut ── */
+  const conf = {{ chart_confidence | safe }};
+  const confCtx = document.getElementById('chartConfidence');
+  if (confCtx && conf) {
+    const labels = ['1–3', '4–6', '7–8', '9–10'];
+    const keys   = ['1-3', '4-6', '7-8', '9-10'];
+    const bgColors = [
+      'rgba(248,81,73,0.3)', 'rgba(210,153,34,0.3)',
+      'rgba(63,185,80,0.3)', 'rgba(88,166,255,0.3)'
+    ];
+    const bdColors = ['#f85149', '#d29922', '#3fb950', '#58a6ff'];
+    new Chart(confCtx, {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: keys.map(k => conf[k] || 0),
+          backgroundColor: bgColors,
+          borderColor: bdColors,
+          borderWidth: 2,
+          hoverOffset: 5,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '60%',
+        plugins: {
+          legend: { display: true, position: 'right' },
+          tooltip: { callbacks: { label: c => 'Confidence ' + c.label + ': ' + c.parsed + ' buys' } }
+        }
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}
