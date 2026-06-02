@@ -175,7 +175,7 @@
           <tr>
             <td class="fw-bold text-start ps-3">{{ row.symbol }}</td>
             {% for j in range(corr_rows | length) %}
-            {% set val = row.values[j] if j < (row.values | length) else 1.0 %}
+            {% set val = row.cols[j] if j < (row.cols | length) else 1.0 %}
             {% set same = (row.symbol == corr_rows[j].symbol) %}
             <td style="background:{% if same %}transparent{% elif val >= 0.7 %}rgba(239,68,68,.25){% elif val >= 0.4 %}rgba(245,158,11,.15){% elif val <= -0.4 %}rgba(59,130,246,.15){% else %}transparent{% endif %}">
               {% if same %}—{% else %}{{ "%.2f"|format(val) }}{% endif %}

@@ -37,7 +37,14 @@
       "PowerShell(vercel whoami 2>&1)",
       "PowerShell(git config --global credential.helper)",
       "PowerShell(git credential-manager version 2>&1)",
-      "PowerShell(git credential-manager --version 2>&1)"
+      "PowerShell(git credential-manager --version 2>&1)",
+      "PowerShell(cmdkey /list:git:https://github.com 2>&1)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"https://ai-paper-trader-tau.vercel.app/ping\" -UseBasicParsing -TimeoutSec 15; $r.Content } catch { \"Error: $_\" })",
+      "PowerShell(vercel logs ai-paper-trader-tau.vercel.app --limit 20 2>&1)",
+      "PowerShell(vercel logs ai-paper-trader-tau.vercel.app --limit 50 --json 2>&1 | ConvertFrom-Json | ForEach-Object { $_.message } | Select-String \"Traceback|Error|ModuleNot|Import\" -CaseSensitive:$false | Select-Object -First 15)",
+      "PowerShell(vercel inspect dpl_3fjkwEFzkCKw4UvTWD6SxwrXPNR8 2>&1)",
+      "PowerShell(Get-ChildItem \"$env:LOCALAPPDATA\" -Recurse -Filter \"auth.json\" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match \"vercel\" } | Select-Object FullName | Select-Object -First 3)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"https://ai-paper-trader-tau.vercel.app/\" -UseBasicParsing -TimeoutSec 20; \"Status: $\\($r.StatusCode\\) | Size: $\\($r.Content.Length\\) bytes\" } catch { \"Error: $_\" })"
     ],
     "additionalDirectories": [
       "c:\\Users\\rodic\\OneDrive\\Υπολογiστής\\Trading\\routers"
