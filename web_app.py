@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import PAPER_TRADING_ONLY, WEB_HOST, WEB_PORT
+from config import PAPER_TRADING_ONLY, WEB_HOST, WEB_PORT, REPORTS_DIR, ON_VERCEL
 
 if not PAPER_TRADING_ONLY:
     print("FATAL: PAPER_TRADING_ONLY is False. Real trading is not implemented.")
@@ -32,9 +32,9 @@ except Exception:
 app = FastAPI(title="AI Paper Trader", docs_url=None, redoc_url=None)
 
 BASE = Path(__file__).parent
-(BASE / "reports_output").mkdir(exist_ok=True)
+REPORTS_DIR.mkdir(exist_ok=True)
 app.mount("/static",         StaticFiles(directory=str(BASE / "static")),         name="static")
-app.mount("/reports_output", StaticFiles(directory=str(BASE / "reports_output")), name="reports_output")
+app.mount("/reports_output", StaticFiles(directory=str(REPORTS_DIR)),              name="reports_output")
 
 app.include_router(dashboard.router)
 app.include_router(research.router)
