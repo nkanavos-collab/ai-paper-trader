@@ -7,10 +7,22 @@ load_dotenv()
 BASE_DIR = Path(__file__).parent
 
 # Vercel serverless: filesystem is read-only except /tmp
-ON_VERCEL = bool(os.getenv("VERCEL"))
-DATABASE_PATH = Path("/tmp/trading.db")          if ON_VERCEL else BASE_DIR / "trading.db"
-REPORTS_DIR   = Path("/tmp/reports_output")      if ON_VERCEL else BASE_DIR / "reports_output"
-REPORTS_DIR.mkdir(exist_ok=True)
+ON_VERCEL  = bool(os.getenv("VERCEL"))
+# Railway mounts a persistent volume at /data when configured, or uses the app dir
+ON_RAILWAY = bool(os.getenv("RAILWAY_ENVIRONMENT"))
+
+if ON_VERCEL:
+    DATABASE_PATH = Path("/tmp/trading.db")
+    REPORTS_DIR   = Path("/tmp/reports_output")
+elif ON_RAILWAY:
+    _data = Path(os.getenv("RAILWAY_DATA_DIR", "/data"))
+    DATABASE_PATH = _data / "trading.db"
+    REPORTS_DIR   = _data / "reports_output"
+else:
+    DATABASE_PATH = BASE_DIR / "trading.db"
+    REPORTS_DIR   = BASE_DIR / "reports_output"
+
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 STARTING_BALANCE_EUR = 100.0
 CURRENCY = "EUR"
@@ -26,8 +38,9 @@ NEWSAPI_KEY          = os.getenv("NEWSAPI_KEY", "")           # optional — fre
 MARKET_CACHE_SECONDS = 60  # cache yfinance quotes for 60s
 
 PAPER_TRADING_ONLY = True  # must stay True — app refuses to start if False
-WEB_HOST = "127.0.0.1"
-WEB_PORT = 8001
+# Railway/cloud: bind to 0.0.0.0 and use PORT env var
+WEB_HOST = "0.0.0.0"       if (ON_RAILWAY or os.getenv("BIND_ALL")) else "127.0.0.1"
+WEB_PORT = int(os.getenv("PORT", "8001"))
 
 # ── Autonomous paper trading ──────────────────────────────────────────────────
 # PAPER_TRADING_ONLY must always be True above. The AI may execute simulated

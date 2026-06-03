@@ -45,7 +45,18 @@
       "PowerShell(vercel inspect dpl_3fjkwEFzkCKw4UvTWD6SxwrXPNR8 2>&1)",
       "PowerShell(Get-ChildItem \"$env:LOCALAPPDATA\" -Recurse -Filter \"auth.json\" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match \"vercel\" } | Select-Object FullName | Select-Object -First 3)",
       "PowerShell(try { $r = Invoke-WebRequest -Uri \"https://ai-paper-trader-tau.vercel.app/\" -UseBasicParsing -TimeoutSec 20; \"Status: $\\($r.StatusCode\\) | Size: $\\($r.Content.Length\\) bytes\" } catch { \"Error: $_\" })",
-      "PowerShell(Get-WmiObject Win32_Process -Filter \"name='python.exe'\" | Select-Object ProcessId, CommandLine | ForEach-Object { \"PID $\\($_.ProcessId\\): $\\($_.CommandLine\\)\" })"
+      "PowerShell(Get-WmiObject Win32_Process -Filter \"name='python.exe'\" | Select-Object ProcessId, CommandLine | ForEach-Object { \"PID $\\($_.ProcessId\\): $\\($_.CommandLine\\)\" })",
+      "PowerShell(Get-Command turso 2>$null)",
+      "PowerShell(npm list -g turso 2>$null)",
+      "PowerShell(npm install -g @tursodatabase/turso-cli 2>&1)",
+      "PowerShell(C:\\\\Users\\\\rodic\\\\anaconda3\\\\python.exe -m pip install libsql-experimental --quiet 2>&1)",
+      "PowerShell(C:\\\\Users\\\\rodic\\\\anaconda3\\\\python.exe -m pip show libsql-experimental 2>&1)",
+      "PowerShell(C:\\\\Users\\\\rodic\\\\anaconda3\\\\python.exe -c \"import libsql_experimental; print\\('libsql OK'\\)\" 2>&1)",
+      "PowerShell(C:\\\\Users\\\\rodic\\\\anaconda3\\\\python.exe -c \"import libsql_experimental; print\\('OK'\\)\" 2>&1)",
+      "PowerShell(Get-Command railway 2>$null)",
+      "PowerShell(Get-Command npx 2>$null)",
+      "PowerShell(railway whoami 2>&1)",
+      "PowerShell(railway login --browserless 2>&1)"
     ],
     "additionalDirectories": [
       "c:\\Users\\rodic\\OneDrive\\Υπολογiστής\\Trading\\routers"
